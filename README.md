@@ -4,210 +4,214 @@
 
 <h1 align="center">coTs</h1>
 
+<p align="center"><b>English</b> · <a href="README.es.md">Español</a></p>
+
 <p align="center">
-  <b>Notas de código para ti y tus IAs.</b><br>
-  Una app nativa de la barra de menú de macOS donde Claude Code, Codex o Gemini guardan informes, logs y planes, y donde tú los lees, editas y apruebas.
+  <b>Code notes for you and your AIs.</b><br>
+  A native macOS menu bar app where Claude Code, Codex or Gemini save reports, logs and plans, and where you read, edit and approve them.
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/popover.png" width="300" alt="Lista de notas en el popover">
+  <img src="docs/screenshots/popover.png" width="300" alt="Notes list in the popover">
   &nbsp;
-  <img src="docs/screenshots/popover-plan.png" width="300" alt="Revisión de un plan">
+  <img src="docs/screenshots/popover-plan.png" width="300" alt="Reviewing a plan">
   &nbsp;
-  <img src="docs/screenshots/popover-dark.png" width="300" alt="Modo oscuro">
+  <img src="docs/screenshots/popover-dark.png" width="300" alt="Dark mode">
 </p>
+
+<p align="center"><sub>Screenshots show the app in Spanish; it follows your system language (English and Spanish).</sub></p>
 
 ---
 
-## Qué hace
+## What it does
 
-- **"guarda en cots"** guarda la última respuesta de la IA tal cual, en ~0,3 s y **sin gastar tokens**: en Claude Code un hook la intercepta antes de que llegue al modelo.
-- **"hagamos un plan en cots"**: la IA escribe un plan, tú lo revisas en la app (lo puedes editar) y pulsas **Aprobar**, **Pedir cambios** o **Rechazar**. La IA, que esperaba sin consumir tokens, continúa sola con tu decisión y tu versión del plan.
-- **Nunca pierdes el hilo**: cada sesión de IA va guardando su último mensaje en una nota oculta del proyecto. Si la sesión se cierra o se apaga el Mac, al abrir una sesión nueva en ese proyecto coTs te avisa con una notificación, y la IA recibe un resumen de una línea de dónde se quedó.
-- **Topics y colores**: cada nota se etiqueta sola con el proyecto (repo git) donde trabajaba la IA, y cada topic tiene siempre el mismo color. También puedes elegir el color de cada nota.
-- **Solo archivos Markdown**: tus notas son `.md` normales en `~/coTs`. Las puedes abrir con cualquier editor, versionar o sincronizar.
-- **Siempre a mano**: vive en la barra de menú, arranca al iniciar sesión y muestra cuántas notas tienes sin leer y cuántos planes esperan tu revisión.
-- **Español e inglés.**
+- **"save in cots"** stores the AI's last reply verbatim in ~0.3 s and **without spending tokens**: in Claude Code a hook catches the phrase before it reaches the model.
+- **"let's make a plan in cots"**: the AI writes a plan, you review it in the app (you can edit it) and click **Approve**, **Request changes** or **Reject**. The AI, which was waiting without consuming tokens, continues on its own with your decision and your version of the plan.
+- **Never lose the thread**: every AI session keeps saving its last message to a hidden note for the project. If the session closes or the Mac shuts down, the next time a session starts in that project coTs notifies you, and the AI gets a one-line recap of where it stopped.
+- **Topics and colors**: each note is tagged automatically with the project (git repo) the AI was working in, and each topic always gets the same color. You can also pick a color per note.
+- **Just Markdown files**: your notes are plain `.md` files in `~/coTs`. Open them with any editor, version them or sync them.
+- **Always at hand**: it lives in the menu bar, starts at login and shows how many notes are unread and how many plans await your review.
+- **English and Spanish.**
 
-## Instalar
+## Install
 
-1. Abre `coTs-<versión>.dmg` y arrastra **coTs** a **Aplicaciones**.
-2. Ábrela. La primera vez se instala sola:
-   - el arranque al iniciar sesión;
-   - el CLI `cots` en `/usr/local/bin` (o `~/.local/bin`);
-   - la skill para IAs en `~/.claude/skills/cots` (Claude Code) y `~/.agents/skills/cots` (Codex, Gemini CLI y Antigravity);
-   - los hooks de Claude Code en `~/.claude/settings.json` (guardado directo y sesiones), sin tocar tus otros hooks;
-   - el permiso de notificaciones, que macOS te pedirá.
-3. Abre una sesión nueva de tu agente para que cargue la skill.
+1. Open `coTs-<version>.dmg` and drag **coTs** to **Applications**.
+2. Open it. On first launch it sets up:
+   - launch at login;
+   - the `cots` CLI in `/usr/local/bin` (or `~/.local/bin`);
+   - the AI skill in `~/.claude/skills/cots` (Claude Code) and `~/.agents/skills/cots` (Codex, Gemini CLI, Antigravity);
+   - the Claude Code hooks in `~/.claude/settings.json` (direct save and sessions), leaving your other hooks untouched;
+   - notification permission, which macOS will ask you for.
+3. Start a new session of your agent so it loads the skill.
 
-<p align="center"><img src="docs/screenshots/settings.png" width="460" alt="Ajustes"></p>
+<p align="center"><img src="docs/screenshots/settings.png" width="460" alt="Settings"></p>
 
-En **Ajustes → Integración con IAs** ves el estado de cada pieza, puedes reinstalarla o quitarla, y aparecen los errores si algo no se pudo instalar.
+**Settings → AI integration** shows the status of each piece, lets you reinstall or remove it, and lists errors if something couldn't be installed.
 
-**Desinstalar:** **Ajustes → Desinstalar coTs…** quita:
-- la app (va a la Papelera);
-- el CLI, la skill y los hooks;
-- el arranque automático;
-- las preferencias y las cachés.
+**Uninstall:** **Settings → Uninstall coTs…** removes:
+- the app (to the Trash);
+- the CLI, skill and hooks;
+- the login item;
+- preferences and caches.
 
-Tus notas solo se borran si marcas la casilla, y también van a la Papelera.
+Your notes are only removed if you tick the box, and they go to the Trash too.
 
-## Hablarle a la IA
+## Talking to your AI
 
-| Le dices | Qué pasa |
+| You say | What happens |
 |---|---|
-| `guarda en cots` | Guarda su última respuesta en `code-notes`. En Claude Code no pasa por el modelo. |
-| `guarda en cots ideas` | Igual, pero en la carpeta `ideas` (se crea si no existe). |
-| `guarda un resumen con los pendientes en cots` | La IA escribe el contenido que pediste y lo guarda. |
-| `hagamos un plan en cots para …` | La IA crea un plan en `plans` y espera tu decisión. |
-| `revisa mis notas de cots de este proyecto` | La IA lista títulos y resúmenes (barato en contexto) y solo abre lo que necesita. |
+| `save in cots` | Saves its last reply to `code-notes`. In Claude Code it never reaches the model. |
+| `save in cots ideas` | Same, into the `ideas` folder (created if missing). The Spanish `guarda en cots …` works too. |
+| `save a summary with the open tasks in cots` | The AI writes what you asked for and saves it. |
+| `let's make a plan in cots for …` | The AI creates a plan in `plans` and waits for your decision. |
+| `check my cots notes for this project` | The AI lists titles and summaries (cheap on context) and only opens what it needs. |
 
-### El ciclo de un plan
+### The plan loop
 
 <p align="center">
-  <img src="docs/screenshots/popover-plan.png" width="300" alt="Plan pendiente con Aprobar, Pedir cambios y Rechazar">
+  <img src="docs/screenshots/popover-plan.png" width="300" alt="Pending plan with Approve, Request changes and Reject">
   &nbsp;
-  <img src="docs/screenshots/popover-plans-expanded.png" width="300" alt="Planes terminados en gris">
+  <img src="docs/screenshots/popover-plans-expanded.png" width="300" alt="Finished plans in gray">
 </p>
 
 ```
-IA: cots plan …  ──►  aparece en coTs › Plans (badge naranja)
-IA: cots wait <id> (en segundo plano, 0 tokens)
-Tú: lees, editas, comentas → Aprobar / Pedir cambios / Rechazar
-IA: se despierta con  review: approved|changes|rejected + comentario + plan final
+AI:  cots plan …  ──►  shows up in coTs › Plans (orange badge)
+AI:  cots wait <id> (in the background, 0 tokens)
+You: read, edit, comment → Approve / Request changes / Reject
+AI:  wakes up with  review: approved|changes|rejected + comment + final plan
 ```
 
-Los planes aprobados o rechazados pasan a gris, dentro de la subsección **Planes terminados**.
+Approved and rejected plans turn gray and move into the **Finished plans** subsection.
 
-### Retomar donde lo dejaste
+### Pick up where you left off
 
-<p align="center"><img src="docs/screenshots/popover-session.png" width="300" alt="Nota de una sesión interrumpida"></p>
+<p align="center"><img src="docs/screenshots/popover-session.png" width="300" alt="Note from an interrupted session"></p>
 
-1. Mientras trabajas, el hook `Stop` guarda la última respuesta de cada sesión en `~/coTs/_sessions/<proyecto>--<sesión>.md`. Es una nota oculta: no sale en las listas.
-2. `SessionEnd` anota si la sesión se cerró normalmente. Si se cuelga o apagas el Mac, ese aviso no llega, y no pasa nada.
-3. Al abrir una sesión nueva en el mismo proyecto, `SessionStart`:
-   - avisa a coTs, que muestra una **notificación de macOS** y un aviso naranja en el popover;
-   - le pasa a la IA unas líneas con el último mensaje y el id de la nota (~100 tokens).
-4. En la nota eliges qué hacer:
-   - **Retomar** copia un prompt para continuar;
-   - **Guardar como nota** la conserva en `code-notes`;
-   - **Descartar** quita el aviso.
+1. While you work, the `Stop` hook saves each session's last reply to `~/coTs/_sessions/<project>--<session>.md`. It's a hidden note: it doesn't show up in lists.
+2. `SessionEnd` records whether the session closed normally. If it crashes or you shut down the Mac, that signal never arrives, and that's fine.
+3. When a new session starts in the same project, `SessionStart`:
+   - tells coTs, which shows a **macOS notification** and an orange banner in the popover;
+   - gives the AI a few lines with the last message and the note id (~100 tokens).
+4. In the note you choose what to do:
+   - **Resume** copies a prompt to continue;
+   - **Save as note** keeps it in `code-notes`;
+   - **Dismiss** clears the reminder.
 
-   Todas las sesiones siguen en **Vista ampliada → Sistema → Sesiones**.
+   All sessions remain under **Expanded window → System → Sessions**.
 
-## La app
+## The app
 
 <table>
   <tr>
-    <td align="center"><img src="docs/screenshots/popover-report.png" width="260"><br><sub>Detalle de una nota: resumen, acciones y checklist</sub></td>
-    <td align="center"><img src="docs/screenshots/sidebar.png" width="160"><br><sub>Barra lateral de la vista ampliada</sub></td>
-    <td align="center"><img src="docs/screenshots/new-note.png" width="260"><br><sub>Nueva nota: carpeta, topic, estilo y color</sub></td>
+    <td align="center"><img src="docs/screenshots/popover-report.png" width="260"><br><sub>A note: summary, actions and checklist</sub></td>
+    <td align="center"><img src="docs/screenshots/sidebar.png" width="160"><br><sub>Expanded window sidebar</sub></td>
+    <td align="center"><img src="docs/screenshots/new-note.png" width="260"><br><sub>New note: folder, topic, style and color</sub></td>
   </tr>
 </table>
 
-- **Icono de la barra de menú:**
-  - el clic izquierdo abre el popover: búsqueda, chips de carpetas y topics, lista y detalle de cada nota. El botón ⤢ abre la vista ampliada;
-  - el **clic derecho** (o ⌃clic) abre el menú general: Nueva nota, Abrir expandida, Abrir carpeta de notas, Ver archivadas, Mostrar planes terminados, Abrir al iniciar sesión, Ajustes y Salir.
-- **Vista ampliada:** barra lateral (Todas · Carpetas · Topics), lista y detalle. Mientras está abierta, coTs aparece en el Dock y en la barra de menús:
+- **Menu bar icon:**
+  - left click opens the popover: search, folder and topic chips, list and note details. The ⤢ button opens the expanded window;
+  - **right click** (or ⌃-click) opens the general menu: New note, Open expanded, Open notes folder, Show archived, Show finished plans, Open at login, Settings and Quit.
+- **Expanded window:** sidebar (All · Folders · Topics · System), list and detail. While it's open, coTs shows in the Dock and the menu bar:
 
-| Menú | Atajos |
+| Menu | Shortcuts |
 |---|---|
-| Archivo | Nueva nota ⌘N |
-| Nota | Leída o no leída ⌘⇧U · Fijar ⌘⇧P · Color · Copiar id ⌘⇧C · Mostrar en Finder ⌘⇧R · Archivar ⌘⇧A · Papelera ⌘⌫ |
-| Ver | Todas ⌘0 · Carpetas ⌘1–⌘9 · Ver archivadas ⌘⇧H · Mostrar planes terminados |
+| File | New note ⌘N |
+| Note | Read/unread ⌘⇧U · Pin ⌘⇧P · Color · Copy ID ⌘⇧C · Show in Finder ⌘⇧R · Archive ⌘⇧A · Trash ⌘⌫ |
+| View | All ⌘0 · Folders ⌘1–⌘9 · Show archived ⌘⇧H · Show finished plans |
 
-- **En cada nota:** editar, fijar, color 🎨, contexto IA ✨ (oculto por defecto), botones de acción propios y el menú … con el resto. Todo también con clic derecho en la lista.
-- **Estilos:**
+- **On each note:** edit, pin, color 🎨, AI context ✨ (hidden by default), the note's own action buttons and the … menu with the rest. All of it is also available by right-clicking in the list.
+- **Styles:**
   - `document`;
-  - `report`, con el resumen destacado;
-  - `checklist`, con casillas clicables;
-  - `log`, una línea de tiempo;
+  - `report`, with the summary highlighted;
+  - `checklist`, with clickable boxes;
+  - `log`, a timeline;
   - `code`;
   - `plan`.
 
-## Formato de una nota
+## Note format
 
-Cada nota es `~/coTs/<carpeta>/<AAMMDD-HHMM>.md`. El frontmatter tiene tres capas, cada una para un lector distinto:
+Each note is `~/coTs/<folder>/<YYMMDD-HHMM>.md`. The frontmatter has three layers, each for a different reader:
 
 ```yaml
 ---
-# 1. Identidad: la ves en la app; la IA la lee con `cots list` sin abrir el body
-title: Refactor del módulo auth
-summary: Migré sesiones a JWT; faltan tests
+# 1. Identity: you see it in the app; the AI reads it with `cots list` without opening the body
+title: Auth module refactor
+summary: Moved sessions to JWT; expiry tests missing
 status: unread            # unread | read | archived
-topic: neomambi-api       # proyecto, detectado del repo
+topic: neomambi-api       # project, detected from the repo
 tags: [auth]
 source: claude-code
 
-# 2. Presentación y acciones: cómo se ve y qué botones tiene
+# 2. Display and actions: how it looks and which buttons it has
 display: { style: report, color: blue, pinned: false }
 actions:
-  - { type: open_url, label: Ver PR, url: https://… }
-  - { type: copy, label: Prompt para continuar, text: "…" }
-  - { type: run, label: Tests, command: swift test }   # siempre pide confirmación
+  - { type: open_url, label: Open PR, url: https://… }
+  - { type: copy, label: Prompt to continue, text: "…" }
+  - { type: run, label: Tests, command: swift test }   # always asks for confirmation
 
-# 3. Contexto para IAs: oculto en la app; solo `cots read --ai`
+# 3. AI context: hidden in the app; only `cots read --ai`
 ai:
   cwd: /Users/me/code/repo
   branch: feat/jwt
   files: [Sources/Auth.swift]
-  next: [Añadir tests de expiración]
-  context: Decisiones y trampas para la próxima IA.
+  next: [Add expiry tests]
+  context: Decisions and pitfalls for the next AI.
 
-review: { status: pending, comment: "…" }   # solo en planes
+review: { status: pending, comment: "…" }   # plans only
 ---
-## Resumen
-El body es para ti.
+## Summary
+The body is for you.
 ```
 
-Las claves desconocidas se conservan siempre. Cada carpeta puede tener un `_folder.yml` con título, icono, color, valores por defecto e instrucciones o plantilla para las IAs. `cots schema` imprime la referencia completa.
+Unknown keys are always preserved. Each folder can have a `_folder.yml` with a title, icon, color, defaults and instructions or a template for AIs. `cots schema` prints the full reference.
 
 ## CLI
 
 ```bash
-cots add <carpeta> --title … [--summary …] [--style …] [--color …] [--ai JSON] [--action 'tipo|etiqueta|valor'] < body.md
-cots add code-notes --from-last-reply        # usa la última respuesta capturada por el hook
-cots plan --title … < plan.md                 # crea un plan pendiente
-cots wait <id> [--timeout s]                  # bloquea hasta que decidas
+cots add <folder> --title … [--summary …] [--style …] [--color …] [--ai JSON] [--action 'type|label|value'] < body.md
+cots add code-notes --from-last-reply        # uses the last reply captured by the hook
+cots plan --title … < plan.md                 # creates a pending plan
+cots wait <id> [--timeout s]                  # blocks until you decide
 cots review <id> approved|changes|rejected [--comment …]
-cots list [carpeta] [--topic X] [--unread] [--json]
-cots read <id> [--ai] [--raw]                 # <carpeta>/latest = la más reciente
-cots search "texto" · cots append <id> · cots set <id> --status … --pin
-cots folders · cots folder <nombre> · cots mkdir <nombre> …
+cots list [folder] [--topic X] [--unread] [--json]
+cots read <id> [--ai] [--raw]                 # <folder>/latest = the most recent
+cots search "text" · cots append <id> · cots set <id> --status … --pin
+cots folders · cots folder <name> · cots mkdir <name> …
 ```
 
-## Almacenamiento
+## Storage
 
-Por defecto las notas están en `~/coTs`. En **Ajustes** puedes elegir otra carpeta, o **iCloud Drive** para verlas desde el iPhone con la app Archivos. La app y el CLI comparten la configuración en `~/.config/cots/config.json`, y la variable `COTS_HOME` la sobrescribe.
+Notes live in `~/coTs` by default. In **Settings** you can pick another folder, or **iCloud Drive** to see them on your iPhone in the Files app. The app and the CLI share their configuration in `~/.config/cots/config.json`; the `COTS_HOME` variable overrides it.
 
-## Desarrollo
+## Development
 
-Requiere macOS 14+ y Swift 6. Dependencias: [Yams](https://github.com/jpsim/Yams) y [swift-argument-parser](https://github.com/apple/swift-argument-parser).
+Requires macOS 14+ and Swift 6. Dependencies: [Yams](https://github.com/jpsim/Yams) and [swift-argument-parser](https://github.com/apple/swift-argument-parser).
 
 ```bash
 swift build && swift test
-scripts/make-dmg.sh                 # build/coTs.app firmada ad-hoc + build/coTs-<versión>.dmg
-scripts/install.sh                  # atajo: compila y copia a /Applications
-swift scripts/make-icon.swift .     # regenera el icono (luego iconutil, ver el script)
+scripts/make-dmg.sh                 # ad-hoc signed build/coTs.app + build/coTs-<version>.dmg
+scripts/install.sh                  # shortcut: build and copy to /Applications
+swift scripts/make-icon.swift .     # regenerates the icon (then iconutil, see the script)
 
-# QA visual sin pantalla: datos de ejemplo + capturas de las vistas reales
-# (las del README salen de aquí, copiadas a docs/screenshots)
+# Visual QA without a screen: sample data + renders of the real views
+# (the README screenshots come from here, copied to docs/screenshots)
 scripts/fixtures.sh /tmp/cots-fx/notes
 COTS_HOME=/tmp/cots-fx/notes .build/debug/CotsApp --snapshot /tmp/cots-fx/shots -AppleLanguages "(es)" -AppleLocale es_ES
 ```
 
-| Ruta | Contenido |
+| Path | Contents |
 |---|---|
-| `Sources/CotsCore` | Formato, parser YAML, almacenamiento, topics, caché de respuestas. Se reutilizará en la app de iOS. |
-| `Sources/CLI` | `cots` y los puntos de entrada de los hooks (`cots hook claude-stop`, `claude-prompt`, `claude-session-start`, `claude-session-end`). |
-| `Sources/App` | App SwiftUI: popover, ventana, ajustes, comandos de menú, integraciones y desinstalador. |
-| `skill/cots/SKILL.md` | Skill en formato abierto Agent Skills. |
-| `Resources` | Icono y traducciones (`es` es el idioma base, `en`). |
+| `Sources/CotsCore` | Format, YAML parsing, storage, topics, sessions, reply cache. To be reused by the iOS app. |
+| `Sources/CLI` | `cots` and the hook entry points (`cots hook claude-stop`, `claude-prompt`, `claude-session-start`, `claude-session-end`). |
+| `Sources/App` | SwiftUI app: popover, window, settings, menu commands, notifications, integrations and uninstaller. |
+| `skill/cots/SKILL.md` | Skill in the open Agent Skills format. |
+| `Resources` | Icon and translations (`es` is the base language, plus `en`). |
 
-Para distribuir a otros Macs sin el aviso de "desarrollador no identificado" hay que firmar con Developer ID y notarizar.
+To distribute to other Macs without the "unidentified developer" warning, sign with a Developer ID and notarize.
 
-## Pendiente
+## Roadmap
 
-- App de iOS reutilizando `CotsCore`.
-- Notificaciones del sistema cuando una IA deja una nota.
-- Servidor MCP para agentes sin terminal (ChatGPT y Claude Desktop).
+- iOS app reusing `CotsCore`.
+- System notifications when an AI leaves a note.
+- MCP server for agents without a terminal (ChatGPT and Claude Desktop).

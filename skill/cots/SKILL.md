@@ -1,6 +1,6 @@
 ---
 name: cots
-description: Guarda notas y planes en coTs, la app de notas de la barra de menú del usuario, mediante el CLI `cots`. Úsala cuando el usuario diga "guarda en cots [carpeta]", "guarda esto/el informe en cots", "hagamos un plan en cots", "plan en cots", o pida leer, buscar o continuar notas o planes de coTs.
+description: Guarda notas y planes en coTs, la app de notas de la barra de menú del usuario, mediante el CLI `cots`. Úsala cuando el usuario diga "guarda en cots [carpeta]", "guarda esto/el informe en cots", "hagamos un plan en cots", "plan en cots", o pida leer, buscar o continuar notas o planes de coTs. También en inglés: "save in/to cots [folder]", "let's make a plan in cots".
 ---
 
 # coTs
