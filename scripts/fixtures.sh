@@ -5,7 +5,7 @@ set -euo pipefail
 export COTS_HOME="$1"
 C="${CLI:-$(cd "$(dirname "$0")/.." && pwd)/.build/debug/cots}"
 
-"$C" add code-notes --topic neomambi-api --source claude-code --title "Refactor de autenticación con JWT" \
+"$C" add code-notes --topic shop-api --source claude-code --title "Refactor de autenticación con JWT" \
   --summary "Sesiones migradas a JWT con rotación de refresh tokens; faltan tests de expiración" --tags auth,backend \
   --action 'open_url|Ver PR #42|https://github.com' --action 'copy|Prompt para continuar|Continúa el refactor de auth' \
   --ai '{"branch":"feat/jwt","files":["Sources/Auth/JWT.swift","Sources/Auth/SessionStore.swift"],"next":["Tests de expiración","Borrar SessionStore"]}' \
@@ -14,7 +14,7 @@ C="${CLI:-$(cd "$(dirname "$0")/.." && pwd)/.build/debug/cots}"
   --summary "El overlay captura el tap; arreglado con pointer-events y un listener en touchend" --body $'## Causa\nEl overlay del menú quedaba encima del botón en Safari 18.\n\n## Arreglo\n`pointer-events: none` en el overlay cerrado.' >/dev/null
 "$C" add code-notes --topic coTs --source user --title "Ideas para coTs" --style checklist --pin \
   --body $'- [x] Guardado directo sin tokens\n- [x] Aprobación de planes\n- [ ] App de iOS\n- [ ] Notificaciones al volver a un proyecto' >/dev/null
-"$C" add code-notes --topic neomambi-api --source claude-code --title "Despliegues a producción" --style log --color green \
+"$C" add code-notes --topic shop-api --source claude-code --title "Despliegues a producción" --style log --color green \
   --summary "Registro de versiones desplegadas" --body "Despliegues de la API." >/dev/null
 "$C" append code-notes/latest --text "v1.4.0: JWT y rate limiting" >/dev/null
 "$C" set code-notes/latest --status read >/dev/null
@@ -26,12 +26,12 @@ plan() { # topic status title summary
   [ "$2" != pending ] && "$C" review "$id" "$2" --comment "Hazlo en dos fases" >/dev/null
   "$C" set "$id" --status read >/dev/null
 }
-plan neomambi-api rejected "Plan: reescribir la API en Rust" "Reescritura completa del servicio"
+plan shop-api rejected "Plan: reescribir la API en Rust" "Reescritura completa del servicio"
 plan landing-web approved "Plan: caché de imágenes en el CDN" "Servir imágenes optimizadas desde el CDN"
 plan landing-web changes "Plan: rediseñar el onboarding" "Tres pasos en lugar de cinco, con progreso visible"
-plan neomambi-api pending "Plan: migrar la base de datos a Postgres 17" "Actualizar a Postgres 17 sin downtime usando replicación lógica"
+plan shop-api pending "Plan: migrar la base de datos a Postgres 17" "Actualizar a Postgres 17 sin downtime usando replicación lógica"
 # A session that ended mid-task in a project, handed back when a new one starts there.
-R="$COTS_HOME/../neomambi-api"; mkdir -p "$R/.git"
+R="$COTS_HOME/../shop-api"; mkdir -p "$R/.git"
 printf '{"session_id":"s-old","cwd":"%s","last_assistant_message":"%s"}' "$R" \
   '## Migración a Postgres a medias\n\nCompleté el paso 2 de 3: la réplica lógica está al día.\n\n- [x] Crear la base nueva\n- [x] Replicar datos\n- [ ] Validar en staging y cambiar el flag' \
   | "$C" hook claude-stop

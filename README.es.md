@@ -137,7 +137,7 @@ Cada nota es `~/coTs/<carpeta>/<AAMMDD-HHMM>.md`. El frontmatter tiene tres capa
 title: Refactor del módulo auth
 summary: Migré sesiones a JWT; faltan tests
 status: unread            # unread | read | archived
-topic: neomambi-api       # proyecto, detectado del repo
+topic: shop-api       # proyecto, detectado del repo
 tags: [auth]
 source: claude-code
 

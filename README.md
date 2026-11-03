@@ -139,7 +139,7 @@ Each note is `~/coTs/<folder>/<YYMMDD-HHMM>.md`. The frontmatter has three layer
 title: Auth module refactor
 summary: Moved sessions to JWT; expiry tests missing
 status: unread            # unread | read | archived
-topic: neomambi-api       # project, detected from the repo
+topic: shop-api       # project, detected from the repo
 tags: [auth]
 source: claude-code
 
