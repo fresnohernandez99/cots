@@ -419,7 +419,8 @@ struct SettingsView: View {
         Form {
             Section("Notas") {
                 LabeledContent("Carpeta") {
-                    Text(verbatim: model.store.root.path).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                    Text(verbatim: (model.store.root.path as NSString).abbreviatingWithTildeInPath)
+                        .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                 }
                 HStack {
                     Button("Cambiar…", action: chooseRoot)

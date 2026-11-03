@@ -12,7 +12,7 @@ enum Snapshots {
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let model = AppModel()
         let plan = model.notes.first { $0.style == .plan && $0.reviewStatus == .pending }
-        let report = model.notes.first { $0.style == .report }
+        let report = model.notes.first { $0.style == .report && $0.meta.actions != nil } ?? model.notes.first { $0.style == .report }
 
         for dark in [false, true] {
             let suffix = dark ? "-dark" : ""

@@ -9,6 +9,14 @@
   Una app nativa de la barra de menú de macOS donde Claude Code, Codex o Gemini guardan informes, logs y planes, y donde tú los lees, editas y apruebas.
 </p>
 
+<p align="center">
+  <img src="docs/screenshots/popover.png" width="300" alt="Lista de notas en el popover">
+  &nbsp;
+  <img src="docs/screenshots/popover-plan.png" width="300" alt="Revisión de un plan">
+  &nbsp;
+  <img src="docs/screenshots/popover-dark.png" width="300" alt="Modo oscuro">
+</p>
+
 ---
 
 ## Qué hace
@@ -29,6 +37,8 @@
    - la skill para IAs en `~/.claude/skills/cots` (Claude Code) y `~/.agents/skills/cots` (Codex, Gemini CLI y Antigravity);
    - los hooks de guardado directo en `~/.claude/settings.json`, sin tocar tus otros hooks.
 3. Abre una sesión nueva de tu agente para que cargue la skill.
+
+<p align="center"><img src="docs/screenshots/settings.png" width="460" alt="Ajustes"></p>
 
 En **Ajustes → Integración con IAs** ves el estado de cada pieza, puedes reinstalarla o quitarla, y aparecen los errores si algo no se pudo instalar.
 
@@ -52,6 +62,12 @@ Tus notas solo se borran si marcas la casilla, y también van a la Papelera.
 
 ### El ciclo de un plan
 
+<p align="center">
+  <img src="docs/screenshots/popover-plan.png" width="300" alt="Plan pendiente con Aprobar, Pedir cambios y Rechazar">
+  &nbsp;
+  <img src="docs/screenshots/popover-plans-expanded.png" width="300" alt="Planes terminados en gris">
+</p>
+
 ```
 IA: cots plan …  ──►  aparece en coTs › Plans (badge naranja)
 IA: cots wait <id> (en segundo plano, 0 tokens)
@@ -62,6 +78,14 @@ IA: se despierta con  review: approved|changes|rejected + comentario + plan fina
 Los planes aprobados o rechazados pasan a gris, dentro de la subsección **Planes terminados**.
 
 ## La app
+
+<table>
+  <tr>
+    <td align="center"><img src="docs/screenshots/popover-report.png" width="260"><br><sub>Detalle de una nota: resumen, acciones y checklist</sub></td>
+    <td align="center"><img src="docs/screenshots/sidebar.png" width="160"><br><sub>Barra lateral de la vista ampliada</sub></td>
+    <td align="center"><img src="docs/screenshots/new-note.png" width="260"><br><sub>Nueva nota: carpeta, topic, estilo y color</sub></td>
+  </tr>
+</table>
 
 - **Icono de la barra de menú:**
   - el clic izquierdo abre el popover: búsqueda, chips de carpetas y topics, lista y detalle de cada nota. El botón ⤢ abre la vista ampliada;
@@ -149,8 +173,9 @@ scripts/install.sh                  # atajo: compila y copia a /Applications
 swift scripts/make-icon.swift .     # regenera el icono (luego iconutil, ver el script)
 
 # QA visual sin pantalla: datos de ejemplo + capturas de las vistas reales
+# (las del README salen de aquí, copiadas a docs/screenshots)
 scripts/fixtures.sh /tmp/cots-fx/notes
-COTS_HOME=/tmp/cots-fx/notes .build/debug/CotsApp --snapshot /tmp/cots-fx/shots
+COTS_HOME=/tmp/cots-fx/notes .build/debug/CotsApp --snapshot /tmp/cots-fx/shots -AppleLanguages "(es)" -AppleLocale es_ES
 ```
 
 | Ruta | Contenido |

@@ -367,6 +367,7 @@ struct Plan: ParsableCommand {
     @Option(help: "user, claude-code, codex, gemini...") var source: String?
     @Option(parsing: .unconditional, help: "Objeto JSON/YAML con el contexto para IAs.") var ai: String?
     @Option(help: "Carpeta (por defecto plans).") var folder = NoteStore.plansFolder
+    @Option(help: "Proyecto. Por defecto se detecta del repo git / carpeta actual.") var topic: String?
     @Option(parsing: .unconditional) var body: String?
 
     func run() throws {
@@ -376,7 +377,7 @@ struct Plan: ParsableCommand {
         Frontmatter.set(Node(title), at: ["title"], in: &node)
         if let summary { Frontmatter.set(Node(summary), at: ["summary"], in: &node) }
         if let source { Frontmatter.set(Node(source), at: ["source"], in: &node) }
-        if let topic = Topic.detect(cwd: FileManager.default.currentDirectoryPath) {
+        if let topic = topic ?? Topic.detect(cwd: FileManager.default.currentDirectoryPath) {
             Frontmatter.set(Node(topic), at: ["topic"], in: &node)
         }
         Frontmatter.set(Node(ReviewStatus.pending.rawValue), at: ["review", "status"], in: &node)
