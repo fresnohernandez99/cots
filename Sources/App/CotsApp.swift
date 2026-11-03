@@ -1,3 +1,4 @@
+import AppKit
 import CotsCore
 import ServiceManagement
 import SwiftUI
@@ -19,8 +20,15 @@ struct CotsApp: App {
             Uninstaller.run(deleteNotes: CommandLine.arguments.contains("--delete-notes"),
                             notesRoot: CotsConfig.resolveRoot())
         }
+        // A second copy (e.g. a stale login item from the old identifier) just quits.
+        if let id = Bundle.main.bundleIdentifier,
+           NSRunningApplication.runningApplications(withBundleIdentifier: id)
+               .contains(where: { $0.processIdentifier != getpid() }) {
+            exit(0)
+        }
         Self.registerLoginItemOnFirstLaunch()
         Integrations.setUpOnLaunch()
+        Uninstaller.cleanUpLegacy()
         Notifier.shared.setUp()
     }
 

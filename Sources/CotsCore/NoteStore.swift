@@ -2,6 +2,11 @@ import Foundation
 import Yams
 
 public enum CotsConfig {
+    /// Must match CFBundleIdentifier in scripts/build-app.sh; the CLI uses it for cache paths.
+    public static let bundleID = "com.fresnohernandez.cots"
+    /// Identifier used before 0.4.1; its leftovers are cleaned up on launch and on uninstall.
+    public static let legacyBundleID = "com.neomambi.cots"
+
     /// `$HOME` when set (so tests and sandboxes can redirect everything), else the account's home.
     public static var home: URL {
         if let env = ProcessInfo.processInfo.environment["HOME"], !env.isEmpty {

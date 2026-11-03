@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-VERSION="0.4.0"
+VERSION="0.4.1"
 swift build -c release
 BIN="$(swift build -c release --show-bin-path)"
 APP="build/coTs.app"
@@ -21,7 +21,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleIdentifier</key><string>com.neomambi.cots</string>
+    <key>CFBundleIdentifier</key><string>com.fresnohernandez.cots</string>
     <key>CFBundleName</key><string>coTs</string>
     <key>CFBundleDisplayName</key><string>coTs</string>
     <key>CFBundleExecutable</key><string>coTs</string>

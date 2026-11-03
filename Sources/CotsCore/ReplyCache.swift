@@ -21,7 +21,7 @@ public struct CachedReply: Codable, Equatable, Sendable {
 
 public enum ReplyCache {
     public static var directory: URL {
-        CotsConfig.home.appendingPathComponent("Library/Caches/com.neomambi.cots/replies", isDirectory: true)
+        CotsConfig.home.appendingPathComponent("Library/Caches/\(CotsConfig.bundleID)/replies", isDirectory: true)
     }
 
     public static func store(_ reply: CachedReply) throws {

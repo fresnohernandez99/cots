@@ -183,22 +183,34 @@ enum Integrations {
 enum Uninstaller {
     private static let fm = FileManager.default
 
-    static var bundleID: String { Bundle.main.bundleIdentifier ?? "com.neomambi.cots" }
+    static var bundleID: String { Bundle.main.bundleIdentifier ?? CotsConfig.bundleID }
 
-    /// Files macOS or the app create outside the bundle.
+    /// Files macOS or the app create outside the bundle, for the current and the legacy identifier.
     static var residues: [URL] {
-        let home = CotsConfig.home
-        let lib = home.appendingPathComponent("Library")
+        [bundleID, CotsConfig.legacyBundleID].flatMap(residues(for:))
+            + [CotsConfig.home.appendingPathComponent(".config/cots")]
+    }
+
+    static func residues(for id: String) -> [URL] {
+        let lib = CotsConfig.home.appendingPathComponent("Library")
         return [
-            lib.appendingPathComponent("Preferences/\(bundleID).plist"),
-            lib.appendingPathComponent("Caches/\(bundleID)"),
-            lib.appendingPathComponent("HTTPStorages/\(bundleID)"),
-            lib.appendingPathComponent("HTTPStorages/\(bundleID).binarycookies"),
-            lib.appendingPathComponent("Saved Application State/\(bundleID).savedState"),
-            lib.appendingPathComponent("Application Support/\(bundleID)"),
-            lib.appendingPathComponent("WebKit/\(bundleID)"),
-            home.appendingPathComponent(".config/cots"),
+            lib.appendingPathComponent("Preferences/\(id).plist"),
+            lib.appendingPathComponent("Caches/\(id)"),
+            lib.appendingPathComponent("HTTPStorages/\(id)"),
+            lib.appendingPathComponent("HTTPStorages/\(id).binarycookies"),
+            lib.appendingPathComponent("Saved Application State/\(id).savedState"),
+            lib.appendingPathComponent("Application Support/\(id)"),
+            lib.appendingPathComponent("WebKit/\(id)"),
         ]
+    }
+
+    /// Removes what versions before 0.4.1 left under the old identifier.
+    static func cleanUpLegacy() {
+        let legacy = CotsConfig.legacyBundleID
+        guard UserDefaults.standard.persistentDomain(forName: legacy) != nil
+                || residues(for: legacy).contains(where: { fm.fileExists(atPath: $0.path) }) else { return }
+        UserDefaults.standard.removePersistentDomain(forName: legacy)
+        for url in residues(for: legacy) { try? fm.removeItem(at: url) }
     }
 
     /// Never returns: the app quits, and a detached shell removes the residues the
@@ -217,6 +229,7 @@ enum Uninstaller {
         cleanup.executableURL = URL(fileURLWithPath: "/bin/sh")
         cleanup.arguments = ["-c", "while kill -0 \(getpid()) 2>/dev/null; do sleep 0.2; done; rm -rf \(paths); defaults delete \(bundleID) 2>/dev/null; true"]
         try? cleanup.run()
+        cleanUpLegacy()
 
         if Bundle.main.isInstalledCopy {
             try? fm.trashItem(at: Bundle.main.bundleURL, resultingItemURL: nil)
