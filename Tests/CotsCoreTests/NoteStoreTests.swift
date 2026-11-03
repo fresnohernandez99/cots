@@ -143,4 +143,33 @@ final class NoteStoreTests: XCTestCase {
         XCTAssertEqual(reopened.meta.resume?.resolvedStatus, .open)
         XCTAssertNil(reopened.meta.session?.ended, "a new message means the session is alive again")
     }
+
+    func testMCPServer() throws {
+        let server = MCPServer(store: store)
+        func call(_ id: Int, _ method: String, _ params: [String: Any] = [:]) -> [String: Any] {
+            server.handle(["jsonrpc": "2.0", "id": id, "method": method, "params": params]) ?? [:]
+        }
+        func text(_ response: [String: Any]) -> String {
+            (((response["result"] as? [String: Any])?["content"] as? [[String: Any]])?.first?["text"] as? String) ?? ""
+        }
+        let initialize = call(1, "initialize", ["protocolVersion": "2025-06-18", "clientInfo": ["name": "claude-ai"]])
+        XCTAssertEqual((initialize["result"] as? [String: Any])?["protocolVersion"] as? String, "2025-06-18")
+        XCTAssertNil(server.handle(["jsonrpc": "2.0", "method": "notifications/initialized"]))
+        let tools = ((call(2, "tools/list")["result"] as? [String: Any])?["tools"] as? [[String: Any]])?.compactMap { $0["name"] as? String }
+        XCTAssertEqual(tools?.contains("save_note"), true)
+
+        XCTAssertTrue(text(call(3, "tools/call", ["name": "save_note", "arguments": ["title": "Hola", "body": "cuerpo"]])).contains("code-notes/"))
+        XCTAssertEqual(try store.notes(in: "code-notes").first?.meta.source, "claude-ai")
+
+        let plan = text(call(4, "tools/call", ["name": "create_plan", "arguments": ["title": "Plan", "body": "- [ ] x"]]))
+        let id = try XCTUnwrap(plan.range(of: #"plans/[0-9-]+"#, options: .regularExpression).map { String(plan[$0]) })
+        XCTAssertTrue(text(call(5, "tools/call", ["name": "get_plan_review", "arguments": ["id": id]])).hasPrefix("review: pending"))
+        try store.setReview(id, .approved, comment: "ok")
+        let review = text(call(6, "tools/call", ["name": "get_plan_review", "arguments": ["id": id]]))
+        XCTAssertTrue(review.hasPrefix("review: approved\ncomment: ok"), review)
+
+        let missing = call(7, "tools/call", ["name": "read_note", "arguments": [:]])
+        XCTAssertEqual((missing["result"] as? [String: Any])?["isError"] as? Bool, true)
+        XCTAssertEqual((call(8, "nope")["error"] as? [String: Any])?["code"] as? Int, -32601)
+    }
 }

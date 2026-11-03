@@ -39,6 +39,7 @@
    - el CLI `cots` en `/usr/local/bin` (o `~/.local/bin`);
    - la skill para IAs en `~/.claude/skills/cots` (Claude Code) y `~/.agents/skills/cots` (Codex, Gemini CLI y Antigravity);
    - los hooks de Claude Code en `~/.claude/settings.json` (guardado directo y sesiones), sin tocar tus otros hooks;
+   - el servidor MCP en Claude Desktop, si lo tienes instalado;
    - el permiso de notificaciones, que macOS te pedirá.
 3. Abre una sesión nueva de tu agente para que cargue la skill.
 
@@ -96,6 +97,18 @@ Los planes aprobados o rechazados pasan a gris, dentro de la subsección **Plane
    - **Descartar** quita el aviso.
 
    Todas las sesiones siguen en **Vista ampliada → Sistema → Sesiones**.
+
+### Claude Desktop y ChatGPT (MCP)
+
+Las apps sin terminal ni hooks usan coTs a través de su servidor MCP, `cots mcp` (stdio). Ofrece estas herramientas:
+- `list_folders`, `list_notes`, `search_notes`, `read_note`;
+- `save_note`, `append_to_note`;
+- `create_plan`, `get_plan_review`.
+
+- **Claude Desktop:** coTs se registra sola en `claude_desktop_config.json` al abrirse por primera vez, o desde **Ajustes → Integración con IAs**. Reinicia Claude Desktop después.
+- **ChatGPT de escritorio y otros clientes MCP:** **Ajustes → Integración con IAs → Copiar configuración** te da el comando (`…/coTs.app/Contents/Resources/cots`) y su argumento (`mcp`). Añádelos como servidor MCP local (en ChatGPT: Ajustes → Plugins).
+
+Sin hooks, ahí "guarda en cots" sí gasta tokens, porque el modelo tiene que enviar el texto. En los planes, la IA crea el plan, tú lo revisas en coTs, le dices "listo" y lee tu decisión con `get_plan_review`.
 
 ## La app
 
@@ -176,6 +189,7 @@ cots list [carpeta] [--topic X] [--unread] [--json]
 cots read <id> [--ai] [--raw]                 # <carpeta>/latest = la más reciente
 cots search "texto" · cots append <id> · cots set <id> --status … --pin
 cots folders · cots folder <nombre> · cots mkdir <nombre> …
+cots mcp                                      # servidor MCP por stdio
 ```
 
 ## Almacenamiento
@@ -212,4 +226,3 @@ Para distribuir a otros Macs sin el aviso de "desarrollador no identificado" hay
 
 - App de iOS reutilizando `CotsCore`.
 - Notificaciones del sistema cuando una IA deja una nota.
-- Servidor MCP para agentes sin terminal (ChatGPT y Claude Desktop).

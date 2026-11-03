@@ -18,9 +18,13 @@ enum Integrations {
 
     // MARK: CLI
 
-    /// Preferred first; `/usr/local/bin` is on every shell's PATH.
+    /// Preferred first; `/usr/local/bin` is on every shell's PATH. `COTS_BIN_DIR` confines
+    /// the link to one folder, so an isolated test install can't touch the real one.
     static var cliLinks: [URL] {
-        [URL(fileURLWithPath: "/usr/local/bin/cots"), home.appendingPathComponent(".local/bin/cots")]
+        if let dir = ProcessInfo.processInfo.environment["COTS_BIN_DIR"], !dir.isEmpty {
+            return [URL(fileURLWithPath: dir).appendingPathComponent("cots")]
+        }
+        return [URL(fileURLWithPath: "/usr/local/bin/cots"), home.appendingPathComponent(".local/bin/cots")]
     }
 
     static var installedCLI: URL? { cliLinks.first(where: isOurLink) }
@@ -158,6 +162,70 @@ enum Integrations {
         return object
     }
 
+    // MARK: MCP clients (Claude Desktop, ChatGPT)
+
+    static var claudeDesktopConfigURL: URL {
+        home.appendingPathComponent("Library/Application Support/Claude/claude_desktop_config.json")
+    }
+
+    /// Claude Desktop creates its support folder on first run; without it there's nothing to configure.
+    static var claudeDesktopPresent: Bool {
+        fm.fileExists(atPath: claudeDesktopConfigURL.deletingLastPathComponent().path)
+    }
+
+    static var mcpInstalledInClaudeDesktop: Bool {
+        guard let data = try? Data(contentsOf: claudeDesktopConfigURL),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let servers = json["mcpServers"] as? [String: Any] else { return false }
+        return servers["cots"] != nil
+    }
+
+    /// The `mcpServers.cots` entry every MCP client needs: run the bundled CLI with `mcp`.
+    static var mcpServerEntry: [String: Any]? {
+        bundledCLI.map { ["command": $0.path, "args": ["mcp"]] }
+    }
+
+    static func installMCPInClaudeDesktop() throws {
+        guard let entry = mcpServerEntry else { throw MaintenanceError("El bundle no incluye el CLI") }
+        try editClaudeDesktopConfig { $0["cots"] = entry }
+    }
+
+    static func removeMCPFromClaudeDesktop() {
+        try? editClaudeDesktopConfig { $0["cots"] = nil }
+    }
+
+    /// Same rule as Claude Code's settings: only rewrite a file that parsed.
+    private static func editClaudeDesktopConfig(_ edit: (inout [String: Any]) -> Void) throws {
+        var config: [String: Any] = [:]
+        if fm.fileExists(atPath: claudeDesktopConfigURL.path) {
+            let data = try Data(contentsOf: claudeDesktopConfigURL)
+            if !data.isEmpty {
+                guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                    throw MaintenanceError("claude_desktop_config.json no es un objeto JSON; no lo toco")
+                }
+                config = object
+            }
+        }
+        var servers = config["mcpServers"] as? [String: Any] ?? [:]
+        edit(&servers)
+        config["mcpServers"] = servers.isEmpty ? nil : servers
+        try fm.createDirectory(at: claudeDesktopConfigURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let data = try JSONSerialization.data(withJSONObject: config, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+        try data.write(to: claudeDesktopConfigURL, options: .atomic)
+    }
+
+    /// What to paste into ChatGPT (Settings → Plugins → add MCP server) or any other MCP client.
+    static var mcpManualConfig: String {
+        let path = bundledCLI?.path ?? "/Applications/coTs.app/Contents/Resources/cots"
+        return """
+        {
+          "mcpServers": {
+            "cots": { "command": "\(path)", "args": ["mcp"] }
+          }
+        }
+        """
+    }
+
     // MARK: Launch
 
     /// First launch installs everything; later launches keep what's installed in sync
@@ -173,6 +241,9 @@ enum Integrations {
         if first || installedCLI != nil { attempt("CLI") { try installCLI() } }
         if first || skillInstalled { attempt("Skill") { try installSkill() } }
         if first || anyHookInstalled { attempt("Hooks") { try installHooks() } }
+        if (first && claudeDesktopPresent) || mcpInstalledInClaudeDesktop {
+            attempt("Claude Desktop") { try installMCPInClaudeDesktop() }
+        }
         UserDefaults.standard.set(true, forKey: firstLaunchKey)
         lastErrors = errors
     }
@@ -220,6 +291,7 @@ enum Uninstaller {
         Integrations.removeCLI()
         Integrations.removeSkill()
         Integrations.removeHooks()
+        Integrations.removeMCPFromClaudeDesktop()
         if deleteNotes { try? fm.trashItem(at: notesRoot, resultingItemURL: nil) }
         UserDefaults.standard.removePersistentDomain(forName: bundleID)
         UserDefaults.standard.synchronize()

@@ -5,10 +5,17 @@ import Yams
 
 @main
 struct Cots: ParsableCommand {
+    /// From the enclosing coTs.app's Info.plist (the CLI lives in Contents/Resources).
+    static let version: String = {
+        let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
+        let plist = exe.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Info.plist")
+        return (NSDictionary(contentsOf: plist)?["CFBundleShortVersionString"] as? String) ?? "dev"
+    }()
+
     static let configuration = CommandConfiguration(
         commandName: "cots",
         abstract: "Notas en Markdown que humanos e IAs comparten. La app de la barra de menú lee la misma carpeta.",
-        subcommands: [Add.self, Plan.self, Wait.self, Review.self, Hook.self, Append.self, List.self, Read.self, Search.self, SetCmd.self,
+        subcommands: [Add.self, Plan.self, Wait.self, Review.self, Hook.self, MCP.self, Append.self, List.self, Read.self, Search.self, SetCmd.self,
                       Folders.self, FolderCmd.self, Mkdir.self, Schema_.self, Root.self]
     )
 }
@@ -541,5 +548,21 @@ struct Hook: ParsableCommand {
             guard let session = input["session_id"] as? String else { return }
             Sessions.end(session: session, reason: input["reason"] as? String, in: NoteStore())
         }
+    }
+}
+
+// MARK: - MCP
+
+struct MCP: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "mcp",
+        abstract: "Servidor MCP por stdio, para Claude Desktop, ChatGPT y otros clientes MCP.",
+        discussion: "Configura el cliente con command = ruta de `cots` y args = [\"mcp\"]."
+    )
+    @OptionGroup var store: StoreOptions
+
+    func run() throws {
+        let root = try store.store()
+        MCPServer(store: root, version: Cots.version).runStdio()
     }
 }

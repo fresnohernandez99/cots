@@ -41,6 +41,7 @@
    - the `cots` CLI in `/usr/local/bin` (or `~/.local/bin`);
    - the AI skill in `~/.claude/skills/cots` (Claude Code) and `~/.agents/skills/cots` (Codex, Gemini CLI, Antigravity);
    - the Claude Code hooks in `~/.claude/settings.json` (direct save and sessions), leaving your other hooks untouched;
+   - the MCP server in Claude Desktop, if it's installed;
    - notification permission, which macOS will ask you for.
 3. Start a new session of your agent so it loads the skill.
 
@@ -98,6 +99,18 @@ Approved and rejected plans turn gray and move into the **Finished plans** subse
    - **Dismiss** clears the reminder.
 
    All sessions remain under **Expanded window → System → Sessions**.
+
+### Claude Desktop and ChatGPT (MCP)
+
+Apps without a terminal or hooks use coTs through its MCP server, `cots mcp` (stdio). It offers these tools:
+- `list_folders`, `list_notes`, `search_notes`, `read_note`;
+- `save_note`, `append_to_note`;
+- `create_plan`, `get_plan_review`.
+
+- **Claude Desktop:** coTs registers itself in `claude_desktop_config.json` on first launch, or from **Settings → AI integration**. Restart Claude Desktop afterwards.
+- **ChatGPT desktop and other MCP clients:** **Settings → AI integration → Copy configuration** gives you the command (`…/coTs.app/Contents/Resources/cots`) and its argument (`mcp`). Add them as a local MCP server (in ChatGPT: Settings → Plugins).
+
+Without hooks, "save in cots" costs tokens there, because the model has to send the text. For plans, the AI creates one, you review it in coTs, tell it "done", and it reads your decision with `get_plan_review`.
 
 ## The app
 
@@ -178,6 +191,7 @@ cots list [folder] [--topic X] [--unread] [--json]
 cots read <id> [--ai] [--raw]                 # <folder>/latest = the most recent
 cots search "text" · cots append <id> · cots set <id> --status … --pin
 cots folders · cots folder <name> · cots mkdir <name> …
+cots mcp                                      # MCP server over stdio
 ```
 
 ## Storage
@@ -214,4 +228,3 @@ To distribute to other Macs without the "unidentified developer" warning, sign w
 
 - iOS app reusing `CotsCore`.
 - System notifications when an AI leaves a note.
-- MCP server for agents without a terminal (ChatGPT and Claude Desktop).

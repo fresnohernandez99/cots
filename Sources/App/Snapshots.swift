@@ -41,7 +41,7 @@ enum Snapshots {
         model.showFinishedPlans = false
         model.selectedFolder = nil
         render(NewNoteView(initialFolder: nil) { _ in }, model: model, size: CGSize(width: 480, height: 560), dark: false, to: dir, name: "new-note")
-        render(SettingsView(), model: model, size: CGSize(width: 600, height: 640), dark: false, to: dir, name: "settings")
+        render(SettingsView(), model: model, size: CGSize(width: 600, height: 700), dark: false, to: dir, name: "settings")
         print(dir.path)
         exit(0)
     }

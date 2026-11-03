@@ -433,6 +433,8 @@ struct SettingsView: View {
     @State private var cliLink = Integrations.installedCLI
     @State private var skillInstalled = Integrations.skillInstalled
     @State private var hooksInstalled = Integrations.hooksInstalled
+    @State private var claudeDesktopMCP = Integrations.mcpInstalledInClaudeDesktop
+    @State private var copiedMCPConfig = false
     @State private var integrationErrors = Integrations.lastErrors
     @State private var language = AppLanguage.current
     @State private var confirmingUninstall = false
@@ -486,6 +488,18 @@ struct SettingsView: View {
                                detail: "~/.claude/settings.json") {
                     if hooksInstalled { Integrations.removeHooks() } else { try Integrations.installHooks() }
                 }
+                integrationRow("Claude Desktop (MCP)", installed: claudeDesktopMCP,
+                               detail: "claude_desktop_config.json") {
+                    if claudeDesktopMCP { Integrations.removeMCPFromClaudeDesktop() } else { try Integrations.installMCPInClaudeDesktop() }
+                }
+                LabeledContent("ChatGPT y otros clientes MCP") {
+                    Button(copiedMCPConfig ? "Copiado" : "Copiar configuración") {
+                        Clipboard.copy(Integrations.mcpManualConfig)
+                        copiedMCPConfig = true
+                    }
+                    .font(.caption)
+                }
+                .help("En ChatGPT: Ajustes → Plugins → añadir servidor MCP local, con este comando y el argumento mcp.")
                 ForEach(integrationErrors, id: \.self) { error in
                     Label { Text(verbatim: error) } icon: { Image(systemName: "exclamationmark.triangle.fill") }
                         .font(.caption).foregroundStyle(.red)
@@ -493,7 +507,7 @@ struct SettingsView: View {
             } header: {
                 Text("Integración con IAs")
             } footer: {
-                Text("«guarda en cots [carpeta]» guarda la última respuesta sin pasar por la IA (0 tokens). «hagamos un plan en cots» crea un plan que revisas aquí.")
+                Text("«guarda en cots [carpeta]» guarda la última respuesta sin pasar por la IA (0 tokens). «hagamos un plan en cots» crea un plan que revisas aquí. Claude Desktop y ChatGPT usan coTs por MCP; reinícialos tras instalarlo.")
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section("Desinstalar") {
@@ -506,7 +520,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 600, height: 640)
+        .frame(width: 600, height: 700)
         .sheet(isPresented: $confirmingUninstall) { uninstallSheet }
     }
 
@@ -566,6 +580,7 @@ struct SettingsView: View {
         cliLink = Integrations.installedCLI
         skillInstalled = Integrations.skillInstalled
         hooksInstalled = Integrations.hooksInstalled
+        claudeDesktopMCP = Integrations.mcpInstalledInClaudeDesktop
     }
 
     private func chooseRoot() {
