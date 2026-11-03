@@ -49,6 +49,10 @@ EOF
    - **changes:** revísalo según el comentario, actualízalo con `cots plan` (uno nuevo) y vuelve a esperar.
    - **rejected:** detente y pregunta.
 
+## Sesiones anteriores
+
+Si al empezar recibes un aviso de coTs sobre la sesión anterior del proyecto, menciónalo en una línea. Léelo con `cots read <id>` solo si el usuario quiere retomarla.
+
 ## Leer gastando poco contexto
 
 - `cots list [carpeta] [--topic X] [--unread]` muestra id, fecha, topic, título y summary, sin el body.

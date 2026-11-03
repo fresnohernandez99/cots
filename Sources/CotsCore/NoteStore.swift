@@ -284,6 +284,14 @@ public final class NoteStore: @unchecked Sendable {
         return try self.note(id: id)
     }
 
+    /// Writes a note at a fixed location (session notes), creating its folder.
+    func write(node: Node, body: String, to url: URL) throws {
+        let dir = url.deletingLastPathComponent()
+        try fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        try Frontmatter.join(node: node, body: body).write(to: url, atomically: true, encoding: .utf8)
+        Ownership.matchHome(root, dir, url)
+    }
+
     public func trash(_ id: String) throws {
         try fm.trashItem(at: note(id: id).url, resultingItemURL: nil)
     }

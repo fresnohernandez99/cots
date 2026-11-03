@@ -9,6 +9,10 @@ final class AppModel {
     private(set) var store: NoteStore
     private(set) var folders: [Folder] = []
     private(set) var notes: [Note] = []
+    /// Hidden `_sessions/` notes: each agent session's latest reply, per project.
+    private(set) var sessionNotes: [Note] = []
+    /// The expanded window's "Sesiones" view.
+    var showSessions = false
     var selectedFolder: String?
     var selectedTopic: String?
     /// Note shown in the expanded window; the popover sets it before opening the window.
@@ -42,6 +46,9 @@ final class AppModel {
 
     var visibleNotes: [Note] {
         let q = search.trimmingCharacters(in: .whitespaces).lowercased()
+        if showSessions {
+            return sessionNotes.filter { q.isEmpty || $0.title.lowercased().contains(q) || $0.body.lowercased().contains(q) }
+        }
         return notes.filter { note in
             (selectedFolder == nil || note.folder == selectedFolder)
                 && (selectedTopic == nil || note.meta.topic == selectedTopic)
@@ -51,7 +58,10 @@ final class AppModel {
         }
     }
 
-    func note(_ id: String) -> Note? { notes.first { $0.id == id } }
+    func note(_ id: String) -> Note? { notes.first { $0.id == id } ?? sessionNotes.first { $0.id == id } }
+
+    /// Sessions handed back to a new session and not yet dismissed.
+    var pendingSessions: [Note] { sessionNotes.filter { $0.meta.resume?.resolvedStatus == .requested } }
 
     func unread(in folder: String) -> Int {
         notes.filter { $0.folder == folder && $0.meta.resolvedStatus == .unread }.count
@@ -65,6 +75,9 @@ final class AppModel {
             let newNotes = try store.notes()
             if newFolders != folders { folders = newFolders }
             if newNotes != notes { notes = newNotes }
+            let newSessions = Sessions.all(in: store)
+            if newSessions != sessionNotes { sessionNotes = newSessions }
+            notifyPendingSessions()
             if let selected = selectedFolder, !folders.contains(where: { $0.name == selected }) { selectedFolder = nil }
             if let topic = selectedTopic, !notes.contains(where: { $0.meta.topic == topic }) { selectedTopic = nil }
         } catch {
@@ -108,6 +121,32 @@ final class AppModel {
     }
 
     func setStatus(_ note: Note, _ status: NoteStatus) { perform { try store.setStatus(note.id, status) } }
+    /// Each handed-back session is notified once; the mark lives in the note so it
+    /// survives relaunches.
+    private func notifyPendingSessions() {
+        for note in Sessions.needingNotification(in: store) {
+            Notifier.shared.post(note)
+            try? Sessions.markNotified(note.id, in: store)
+        }
+    }
+
+    func dismissSession(_ note: Note) { perform { try Sessions.setResume(note.id, .dismissed, in: store) } }
+
+    /// Keeps the session's last message as a regular note, then dismisses the reminder.
+    @discardableResult
+    func promoteSession(_ note: Note) -> Note? {
+        var meta = NoteMeta(title: note.title)
+        meta.topic = note.meta.topic
+        meta.source = note.meta.source
+        meta.status = NoteStatus.read.rawValue
+        var created: Note?
+        perform {
+            created = try store.create(folder: NoteStore.defaultFolder, frontmatter: Frontmatter.node(from: meta), body: note.body)
+            try Sessions.setResume(note.id, .dismissed, in: store)
+        }
+        return created
+    }
+
     func setReview(_ note: Note, _ status: ReviewStatus, comment: String) {
         perform { try store.setReview(note.id, status, comment: comment) }
     }

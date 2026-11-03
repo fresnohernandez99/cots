@@ -62,7 +62,7 @@ final class StatusMenu: NSObject {
         return menu
     }
 
-    private func showWindow() {
+    func showWindow() {
         activate { openWindow?() }
     }
 
@@ -109,5 +109,11 @@ struct StatusLabel: View {
         StatusMenu.shared.install(model: model,
                                  openWindow: { openWindow(id: "main") },
                                  openSettings: { openSettings() })
+        let model = model
+        Notifier.shared.onOpen = { id in
+            model.showSessions = model.sessionNotes.contains { $0.id == id }
+            model.windowSelection = id
+            StatusMenu.shared.showWindow()
+        }
     }
 }

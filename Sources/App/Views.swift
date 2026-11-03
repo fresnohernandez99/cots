@@ -44,6 +44,25 @@ struct MenuContentView: View {
                 .buttonStyle(.borderless)
                 .padding(10)
                 FilterChips()
+                if let pending = model.pendingSessions.first {
+                    Button { openNote = pending.id } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "clock.arrow.circlepath").foregroundStyle(.orange)
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text("Pendiente en \(pending.meta.topic ?? "")").font(.caption.weight(.semibold))
+                                Text(verbatim: pending.title).font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right").font(.caption).foregroundStyle(.tertiary)
+                        }
+                        .padding(8)
+                        .background(.orange.opacity(0.1), in: RoundedRectangle(cornerRadius: 8))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 8)
+                }
                 Divider()
                 NoteList(selection: Binding(get: { openNote }, set: { openNote = $0 }), showFolder: model.selectedFolder == nil)
             }
@@ -285,7 +304,7 @@ struct NewNoteView: View {
 /// previous mix of `String?` tags (which never matched the list's `String` selection,
 /// so clicks didn't register) and plain buttons for topics.
 enum SidebarItem: Hashable {
-    case all, folder(String), topic(String)
+    case all, folder(String), topic(String), sessions
 }
 
 struct SidebarView: View {
@@ -307,6 +326,12 @@ struct SidebarView: View {
                     .tag(SidebarItem.folder(folder.name))
                     .help(folder.config.description ?? "")
                 }
+            }
+            Section("Sistema") {
+                Label("Sesiones", systemImage: "clock.arrow.circlepath")
+                    .badge(model.pendingSessions.count)
+                    .tag(SidebarItem.sessions)
+                    .help("Último mensaje de cada sesión de IA, por proyecto")
             }
             if !model.topics.isEmpty {
                 Section("Topics") {
@@ -337,10 +362,12 @@ struct SidebarView: View {
     /// Folder and topic filters are exclusive in the sidebar; the popover can still combine them.
     private var selection: Binding<SidebarItem?> {
         Binding {
+            if model.showSessions { return .sessions }
             if let topic = model.selectedTopic { return .topic(topic) }
             if let folder = model.selectedFolder { return .folder(folder) }
             return .all
         } set: { item in
+            model.showSessions = item == .sessions
             switch item {
             case .folder(let name):
                 model.selectedFolder = name
@@ -348,7 +375,7 @@ struct SidebarView: View {
             case .topic(let topic):
                 model.selectedTopic = topic
                 model.selectedFolder = nil
-            case .all, nil:
+            case .all, .sessions, nil:
                 model.selectedFolder = nil
                 model.selectedTopic = nil
             }
@@ -365,7 +392,7 @@ struct MainWindowView: View {
         NavigationSplitView {
             SidebarView()
         } content: {
-            NoteList(selection: $model.windowSelection, showFolder: model.selectedFolder == nil)
+            NoteList(selection: $model.windowSelection, showFolder: model.selectedFolder == nil && !model.showSessions)
                 .searchable(text: $model.search)
                 .navigationSplitViewColumnWidth(min: 280, ideal: 340)
                 .toolbar {

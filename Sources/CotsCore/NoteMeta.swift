@@ -128,6 +128,43 @@ public struct AIContext: Codable, Equatable, Sendable {
     public init() {}
 }
 
+/// The agent session a hidden session note mirrors.
+public struct SessionInfo: Codable, Equatable, Sendable {
+    public var id: String?
+    public var agent: String?
+    public var cwd: String?
+    public var started: String?
+    public var last: String?
+    public var ended: String?
+    public var reason: String?
+
+    public init(id: String? = nil, agent: String? = nil, cwd: String? = nil) {
+        self.id = id
+        self.agent = agent
+        self.cwd = cwd
+    }
+}
+
+public enum ResumeStatus: String, Sendable {
+    /// Has a last message nobody has been reminded of yet.
+    case open
+    /// A new session in the project asked for it; the app notifies once.
+    case requested
+    case dismissed
+    /// An older session overtaken by a newer one in the same project.
+    case superseded
+}
+
+public struct ResumeInfo: Codable, Equatable, Sendable {
+    public var status: String?
+    public var requested: String?
+    public var notified: String?
+
+    public init(status: String? = nil) { self.status = status }
+
+    public var resolvedStatus: ResumeStatus { ResumeStatus(rawValue: status ?? "") ?? .open }
+}
+
 public struct NoteMeta: Codable, Equatable, Sendable {
     public var title: String?
     /// One line. Shown under the title and returned by `cots list`, so agents
@@ -146,6 +183,9 @@ public struct NoteMeta: Codable, Equatable, Sendable {
     public var actions: [NoteAction]?
     public var ai: AIContext?
     public var review: Review?
+    /// Only on hidden session notes (`_sessions/`).
+    public var session: SessionInfo?
+    public var resume: ResumeInfo?
 
     public init(title: String? = nil) {
         self.title = title
@@ -158,7 +198,7 @@ public struct NoteMeta: Codable, Equatable, Sendable {
 
     /// Canonical key order used when writing frontmatter. Unknown keys go after these.
     public static let keyOrder = ["title", "summary", "created", "updated", "status", "review", "topic", "tags", "source",
-                                  "display", "actions", "ai"]
+                                  "display", "actions", "session", "resume", "ai"]
 }
 
 public enum Timestamp {

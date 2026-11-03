@@ -346,7 +346,7 @@ struct NoteDetailView: View {
             HStack(spacing: 6) {
                 if let topic = note.meta.topic { TopicChip(topic: topic) }
                 Group {
-                    Text(verbatim: config?.title ?? note.folder)
+                    if note.folder == Sessions.folder { Text("Sesión") } else { Text(verbatim: config?.title ?? note.folder) }
                     Text(verbatim: "·")
                     Text(note.date, format: .dateTime.day().month().hour().minute())
                     if let source = note.meta.source { Text(verbatim: "· \(source)") }
@@ -367,6 +367,9 @@ struct NoteDetailView: View {
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(note.tint(folder: config).opacity(0.12), in: RoundedRectangle(cornerRadius: 8))
+            }
+            if note.folder == Sessions.folder {
+                SessionBanner(note: note)
             }
             if let error = note.parseError {
                 Label("Frontmatter con errores: \(error)", systemImage: "exclamationmark.triangle")
@@ -645,5 +648,45 @@ struct AIContextView: View {
                 Text(verbatim: value).font(.caption).textSelection(.enabled)
             }
         }
+    }
+}
+
+/// Shown on hidden session notes: what happened to that session and what to do with
+/// its last message.
+struct SessionBanner: View {
+    @Environment(AppModel.self) private var model
+    let note: Note
+
+    var body: some View {
+        let session = note.meta.session
+        let interrupted = session?.ended == nil
+        let resume = note.meta.resume?.resolvedStatus ?? .open
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: interrupted ? "bolt.horizontal.circle" : "checkmark.circle")
+                    .foregroundStyle(interrupted ? .orange : .secondary)
+                Text(interrupted ? "La sesión se interrumpió" : "La sesión se cerró")
+                if let last = session?.last.flatMap(Timestamp.parse) {
+                    Text(last, format: .relative(presentation: .named)).foregroundStyle(.secondary)
+                }
+                Spacer()
+                if resume == .dismissed { Text("Descartada").foregroundStyle(.tertiary) }
+            }
+            .font(.caption)
+            HStack {
+                Button {
+                    Clipboard.copy(String(localized: "Retoma la sesión anterior de este proyecto: lee `cots read \(note.id)` y continúa donde lo dejamos."))
+                } label: { Label("Retomar", systemImage: "arrow.uturn.forward") }
+                    .help("Copia un prompt para que una IA retome esta sesión")
+                Button { model.promoteSession(note) } label: { Label("Guardar como nota", systemImage: "square.and.arrow.down") }
+                Spacer()
+                if resume != .dismissed {
+                    Button("Descartar") { model.dismissSession(note) }
+                }
+            }
+            .controlSize(.small)
+        }
+        .padding(10)
+        .background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
     }
 }

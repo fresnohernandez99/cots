@@ -30,6 +30,10 @@ enum Snapshots {
             render(MainWindowView(), model: model, size: CGSize(width: 1100, height: 680), dark: dark, to: dir, name: "window\(suffix)")
             model.windowSelection = nil
         }
+        if let session = model.sessionNotes.first {
+            render(NoteDetailView(noteID: session.id, onBack: {}), model: model, size: CGSize(width: 400, height: 560),
+                   dark: false, to: dir, name: "popover-session")
+        }
         model.selectedFolder = NoteStore.plansFolder
         render(MenuContentView(), model: model, size: CGSize(width: 400, height: 560), dark: false, to: dir, name: "popover-plans")
         model.showFinishedPlans = true

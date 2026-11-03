@@ -117,4 +117,30 @@ final class NoteStoreTests: XCTestCase {
         XCTAssertEqual(Topic.detect(cwd: repo.path), "mi-repo")
         XCTAssertEqual(ReplyCache.title(from: "\n## **Informe** final\ncuerpo"), "Informe final")
     }
+
+    func testSessionHandBack() throws {
+        func reply(_ session: String, _ text: String) -> CachedReply {
+            CachedReply(agent: "claude-code", session: session, cwd: "/repo", text: text)
+        }
+        try Sessions.record(reply("A", "uno"), topic: "repo", in: store)
+        let a = try Sessions.record(reply("A", "## Dejé el paso 3\nresto"), topic: "repo", in: store)
+        XCTAssertEqual(a.id, "_sessions/repo--A")
+        XCTAssertEqual(a.title, "Dejé el paso 3")
+        XCTAssertEqual(try store.notes().count, 0, "session notes stay hidden")
+
+        XCTAssertNil(try Sessions.takePending(topic: "repo", excluding: "A", in: store), "own session is not handed back")
+        XCTAssertNil(try Sessions.takePending(topic: "otro", excluding: "B", in: store))
+        let pending = try XCTUnwrap(Sessions.takePending(topic: "repo", excluding: "B", in: store))
+        XCTAssertEqual(pending.meta.resume?.resolvedStatus, .requested)
+        XCTAssertEqual(Sessions.needingNotification(in: store).map(\.id), [a.id])
+        try Sessions.markNotified(a.id, in: store)
+        XCTAssertTrue(Sessions.needingNotification(in: store).isEmpty)
+        XCTAssertNil(try Sessions.takePending(topic: "repo", excluding: "C", in: store), "handed back only once")
+
+        Sessions.end(session: "A", reason: "logout", in: store)
+        XCTAssertEqual(try store.note(id: a.id).meta.session?.reason, "logout")
+        let reopened = try Sessions.record(reply("A", "nuevo"), topic: "repo", in: store)
+        XCTAssertEqual(reopened.meta.resume?.resolvedStatus, .open)
+        XCTAssertNil(reopened.meta.session?.ended, "a new message means the session is alive again")
+    }
 }

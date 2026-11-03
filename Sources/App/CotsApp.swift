@@ -21,6 +21,7 @@ struct CotsApp: App {
         }
         Self.registerLoginItemOnFirstLaunch()
         Integrations.setUpOnLaunch()
+        Notifier.shared.setUp()
     }
 
     private static let loginItemKey = "didRegisterLoginItem"

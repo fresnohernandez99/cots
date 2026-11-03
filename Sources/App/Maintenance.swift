@@ -91,17 +91,24 @@ enum Integrations {
 
     static var claudeSettingsURL: URL { home.appendingPathComponent(".claude/settings.json") }
 
-    /// `Stop` caches each final reply; `UserPromptSubmit` turns "guarda en cots" into a
-    /// save that never reaches the model.
-    private static let claudeHooks = [("UserPromptSubmit", "claude-prompt"), ("Stop", "claude-stop")]
+    /// `Stop` caches each final reply (and mirrors it into the project's hidden session
+    /// note); `UserPromptSubmit` turns "guarda en cots" into a save that never reaches the
+    /// model; `SessionStart`/`SessionEnd` hand the previous session's last message back.
+    private static let claudeHooks = [("UserPromptSubmit", "claude-prompt"), ("Stop", "claude-stop"),
+                                      ("SessionStart", "claude-session-start"), ("SessionEnd", "claude-session-end")]
 
     private static func isOurHook(_ entry: [String: Any]) -> Bool {
         (entry["command"] as? String)?.contains("/cots\" hook claude-") == true
     }
 
-    static var hooksInstalled: Bool {
-        guard let hooks = (try? readClaudeSettings())??["hooks"] as? [String: Any] else { return false }
-        return claudeHooks.allSatisfy { event, _ in
+    static var hooksInstalled: Bool { installedHookEvents.count == claudeHooks.count }
+
+    /// Any of ours present: an older version installed fewer hooks and gets upgraded on launch.
+    static var anyHookInstalled: Bool { !installedHookEvents.isEmpty }
+
+    private static var installedHookEvents: [String] {
+        guard let hooks = (try? readClaudeSettings())??["hooks"] as? [String: Any] else { return [] }
+        return claudeHooks.map(\.0).filter { event in
             (hooks[event] as? [[String: Any]] ?? []).contains { group in
                 (group["hooks"] as? [[String: Any]] ?? []).contains(where: isOurHook)
             }
@@ -165,7 +172,7 @@ enum Integrations {
         }
         if first || installedCLI != nil { attempt("CLI") { try installCLI() } }
         if first || skillInstalled { attempt("Skill") { try installSkill() } }
-        if first || hooksInstalled { attempt("Hooks") { try installHooks() } }
+        if first || anyHookInstalled { attempt("Hooks") { try installHooks() } }
         UserDefaults.standard.set(true, forKey: firstLaunchKey)
         lastErrors = errors
     }

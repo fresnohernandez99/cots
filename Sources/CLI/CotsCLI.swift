@@ -436,7 +436,7 @@ struct Review: ParsableCommand {
 struct Hook: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Puntos de entrada para hooks de agentes (los instala la app).",
-        subcommands: [ClaudeStop.self, ClaudePrompt.self]
+        subcommands: [ClaudeStop.self, ClaudePrompt.self, ClaudeSessionStart.self, ClaudeSessionEnd.self]
     )
 
     static func input() -> [String: Any] {
@@ -451,7 +451,19 @@ struct Hook: ParsableCommand {
             let input = Hook.input()
             guard let session = input["session_id"] as? String,
                   let text = input["last_assistant_message"] as? String, !text.isEmpty else { return }
-            do { try ReplyCache.store(CachedReply(agent: "claude-code", session: session, cwd: input["cwd"] as? String, text: text)) } catch { FileHandle.standardError.write(Data("cots: \(error)\n".utf8)) }
+            let cwd = input["cwd"] as? String
+            let reply = CachedReply(agent: "claude-code", session: session, cwd: cwd, text: text)
+            do {
+                try ReplyCache.store(reply)
+                // Mirror it into the project's hidden session note, so it survives a crash or shutdown.
+                if let topic = cwd.flatMap(Topic.detect) {
+                    let store = NoteStore()
+                    try store.ensureRoot()
+                    try Sessions.record(reply, topic: topic, in: store)
+                }
+            } catch {
+                FileHandle.standardError.write(Data("cots: \(error)\n".utf8))
+            }
         }
     }
 
@@ -501,6 +513,33 @@ struct Hook: ParsableCommand {
             let out = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             return p.terminationStatus == 0 && !out.isEmpty ? out : nil
+        }
+    }
+
+    /// Claude Code `SessionStart`: if the previous session in this project left a last
+    /// message, flag it for the app's notification and tell the new session in a few lines.
+    struct ClaudeSessionStart: ParsableCommand {
+        static let configuration = CommandConfiguration(commandName: "claude-session-start")
+        func run() throws {
+            let input = Hook.input()
+            // Resumed/cleared/compacted sessions already carry their own context.
+            guard (input["source"] as? String ?? "startup") == "startup",
+                  let session = input["session_id"] as? String,
+                  let topic = (input["cwd"] as? String).flatMap(Topic.detect) else { return }
+            let store = NoteStore()
+            guard let pending = try? Sessions.takePending(topic: topic, excluding: session, in: store) else { return }
+            try printJSON(["hookSpecificOutput": ["hookEventName": "SessionStart",
+                                                  "additionalContext": Sessions.startupContext(for: pending)]])
+        }
+    }
+
+    /// Claude Code `SessionEnd`: records a normal close (absent after a crash or shutdown).
+    struct ClaudeSessionEnd: ParsableCommand {
+        static let configuration = CommandConfiguration(commandName: "claude-session-end")
+        func run() {
+            let input = Hook.input()
+            guard let session = input["session_id"] as? String else { return }
+            Sessions.end(session: session, reason: input["reason"] as? String, in: NoteStore())
         }
     }
 }

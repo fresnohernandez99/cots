@@ -23,6 +23,7 @@
 
 - **"guarda en cots"** guarda la última respuesta de la IA tal cual, en ~0,3 s y **sin gastar tokens**: en Claude Code un hook la intercepta antes de que llegue al modelo.
 - **"hagamos un plan en cots"**: la IA escribe un plan, tú lo revisas en la app (lo puedes editar) y pulsas **Aprobar**, **Pedir cambios** o **Rechazar**. La IA, que esperaba sin consumir tokens, continúa sola con tu decisión y tu versión del plan.
+- **Nunca pierdes el hilo**: cada sesión de IA va guardando su último mensaje en una nota oculta del proyecto. Si la sesión se cierra o se apaga el Mac, al abrir una sesión nueva en ese proyecto coTs te avisa con una notificación, y la IA recibe un resumen de una línea de dónde se quedó.
 - **Topics y colores**: cada nota se etiqueta sola con el proyecto (repo git) donde trabajaba la IA, y cada topic tiene siempre el mismo color. También puedes elegir el color de cada nota.
 - **Solo archivos Markdown**: tus notas son `.md` normales en `~/coTs`. Las puedes abrir con cualquier editor, versionar o sincronizar.
 - **Siempre a mano**: vive en la barra de menú, arranca al iniciar sesión y muestra cuántas notas tienes sin leer y cuántos planes esperan tu revisión.
@@ -35,7 +36,8 @@
    - el arranque al iniciar sesión;
    - el CLI `cots` en `/usr/local/bin` (o `~/.local/bin`);
    - la skill para IAs en `~/.claude/skills/cots` (Claude Code) y `~/.agents/skills/cots` (Codex, Gemini CLI y Antigravity);
-   - los hooks de guardado directo en `~/.claude/settings.json`, sin tocar tus otros hooks.
+   - los hooks de Claude Code en `~/.claude/settings.json` (guardado directo y sesiones), sin tocar tus otros hooks;
+   - el permiso de notificaciones, que macOS te pedirá.
 3. Abre una sesión nueva de tu agente para que cargue la skill.
 
 <p align="center"><img src="docs/screenshots/settings.png" width="460" alt="Ajustes"></p>
@@ -76,6 +78,22 @@ IA: se despierta con  review: approved|changes|rejected + comentario + plan fina
 ```
 
 Los planes aprobados o rechazados pasan a gris, dentro de la subsección **Planes terminados**.
+
+### Retomar donde lo dejaste
+
+<p align="center"><img src="docs/screenshots/popover-session.png" width="300" alt="Nota de una sesión interrumpida"></p>
+
+1. Mientras trabajas, el hook `Stop` guarda la última respuesta de cada sesión en `~/coTs/_sessions/<proyecto>--<sesión>.md`. Es una nota oculta: no sale en las listas.
+2. `SessionEnd` anota si la sesión se cerró normalmente. Si se cuelga o apagas el Mac, ese aviso no llega, y no pasa nada.
+3. Al abrir una sesión nueva en el mismo proyecto, `SessionStart`:
+   - avisa a coTs, que muestra una **notificación de macOS** y un aviso naranja en el popover;
+   - le pasa a la IA unas líneas con el último mensaje y el id de la nota (~100 tokens).
+4. En la nota eliges qué hacer:
+   - **Retomar** copia un prompt para continuar;
+   - **Guardar como nota** la conserva en `code-notes`;
+   - **Descartar** quita el aviso.
+
+   Todas las sesiones siguen en **Vista ampliada → Sistema → Sesiones**.
 
 ## La app
 
@@ -181,7 +199,7 @@ COTS_HOME=/tmp/cots-fx/notes .build/debug/CotsApp --snapshot /tmp/cots-fx/shots 
 | Ruta | Contenido |
 |---|---|
 | `Sources/CotsCore` | Formato, parser YAML, almacenamiento, topics, caché de respuestas. Se reutilizará en la app de iOS. |
-| `Sources/CLI` | `cots` y los puntos de entrada de los hooks (`cots hook claude-stop` / `claude-prompt`). |
+| `Sources/CLI` | `cots` y los puntos de entrada de los hooks (`cots hook claude-stop`, `claude-prompt`, `claude-session-start`, `claude-session-end`). |
 | `Sources/App` | App SwiftUI: popover, ventana, ajustes, comandos de menú, integraciones y desinstalador. |
 | `skill/cots/SKILL.md` | Skill en formato abierto Agent Skills. |
 | `Resources` | Icono y traducciones (`es` es el idioma base, `en`). |

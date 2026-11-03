@@ -30,4 +30,10 @@ plan neomambi-api rejected "Plan: reescribir la API en Rust" "Reescritura comple
 plan landing-web approved "Plan: caché de imágenes en el CDN" "Servir imágenes optimizadas desde el CDN"
 plan landing-web changes "Plan: rediseñar el onboarding" "Tres pasos en lugar de cinco, con progreso visible"
 plan neomambi-api pending "Plan: migrar la base de datos a Postgres 17" "Actualizar a Postgres 17 sin downtime usando replicación lógica"
+# A session that ended mid-task in a project, handed back when a new one starts there.
+R="$COTS_HOME/../neomambi-api"; mkdir -p "$R/.git"
+printf '{"session_id":"s-old","cwd":"%s","last_assistant_message":"%s"}' "$R" \
+  '## Migración a Postgres a medias\n\nCompleté el paso 2 de 3: la réplica lógica está al día.\n\n- [x] Crear la base nueva\n- [x] Replicar datos\n- [ ] Validar en staging y cambiar el flag' \
+  | "$C" hook claude-stop
+printf '{"session_id":"s-new","cwd":"%s","source":"startup"}' "$R" | "$C" hook claude-session-start >/dev/null
 "$C" list --all
