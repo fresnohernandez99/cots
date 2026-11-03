@@ -1,0 +1,315 @@
+import Foundation
+import Yams
+
+public enum CotsConfig {
+    /// `$HOME` when set (so tests and sandboxes can redirect everything), else the account's home.
+    public static var home: URL {
+        if let env = ProcessInfo.processInfo.environment["HOME"], !env.isEmpty {
+            return URL(fileURLWithPath: env, isDirectory: true)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
+    }
+
+    public static var configURL: URL { home.appendingPathComponent(".config/cots/config.json") }
+
+    public static var defaultRoot: URL { home.appendingPathComponent("coTs", isDirectory: true) }
+
+    /// `COTS_HOME` > `~/.config/cots/config.json` > `~/coTs`.
+    /// The app and the CLI share this so both always look at the same folder.
+    public static func resolveRoot() -> URL {
+        if let env = ProcessInfo.processInfo.environment["COTS_HOME"], !env.isEmpty {
+            return URL(fileURLWithPath: (env as NSString).expandingTildeInPath, isDirectory: true)
+        }
+        if let data = try? Data(contentsOf: configURL),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let root = json["root"] as? String, !root.isEmpty {
+            return URL(fileURLWithPath: (root as NSString).expandingTildeInPath, isDirectory: true)
+        }
+        return defaultRoot
+    }
+
+    public static func saveRoot(_ url: URL) throws {
+        let dir = configURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        let data = try JSONSerialization.data(withJSONObject: ["root": url.path], options: [.prettyPrinted])
+        try data.write(to: configURL, options: .atomic)
+    }
+}
+
+public final class NoteStore: @unchecked Sendable {
+    public let root: URL
+    private let fm = FileManager.default
+
+    public init(root: URL = CotsConfig.resolveRoot()) {
+        self.root = root
+    }
+
+    public static let defaultFolder = "code-notes"
+    public static let plansFolder = "plans"
+
+    /// Creates the root and the two built-in folders when missing. Existing
+    /// `_folder.yml` files are never overwritten.
+    public func ensureRoot() throws {
+        try fm.createDirectory(at: root, withIntermediateDirectories: true)
+        let builtIn: [(String, FolderConfig)] = [
+            (Self.defaultFolder, FolderConfig(
+                title: "Code notes",
+                description: "Informes y notas de sesiones con IAs.",
+                icon: "chevron.left.forwardslash.chevron.right",
+                color: "blue",
+                defaults: { var d = NoteMeta(); d.display = Display(style: DisplayStyle.report.rawValue); return d }(),
+                ai: FolderAI(instructions: "Carpeta por defecto: úsala cuando el usuario diga 'guarda en cots' sin nombrar otra.")
+            )),
+            (Self.plansFolder, FolderConfig(
+                title: "Plans",
+                description: "Planes propuestos por IAs, pendientes de revisión.",
+                icon: "list.bullet.clipboard",
+                color: "purple",
+                defaults: { var d = NoteMeta(); d.display = Display(style: DisplayStyle.plan.rawValue); return d }(),
+                ai: FolderAI(instructions: "Crea el plan con `cots plan` y espera la decisión con `cots wait <id>`.")
+            )),
+        ]
+        for (name, config) in builtIn where !fm.fileExists(atPath: root.appendingPathComponent(name).path) {
+            try createFolder(name, config: config)
+        }
+    }
+
+    // MARK: Folders
+
+    public func folders() throws -> [Folder] {
+        guard fm.fileExists(atPath: root.path) else { return [] }
+        let urls = try fm.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey],
+                                              options: [.skipsHiddenFiles])
+        return try urls
+            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
+            .filter { !$0.lastPathComponent.hasPrefix("_") }
+            .map { url in
+                let notes = try noteURLs(in: url)
+                let unread = notes.filter { (try? loadNote(at: $0).meta.resolvedStatus) == .unread }.count
+                return Folder(name: url.lastPathComponent, url: url, config: folderConfig(url.lastPathComponent),
+                              noteCount: notes.count, unreadCount: unread)
+            }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    public func folderConfig(_ name: String) -> FolderConfig {
+        let url = root.appendingPathComponent(name).appendingPathComponent(FolderConfig.fileName)
+        guard let yaml = try? String(contentsOf: url, encoding: .utf8),
+              let config = try? YAMLDecoder().decode(FolderConfig.self, from: yaml) else { return FolderConfig() }
+        return config
+    }
+
+    @discardableResult
+    public func createFolder(_ name: String, config: FolderConfig = FolderConfig()) throws -> Folder {
+        try Self.validateFolderName(name)
+        let url = root.appendingPathComponent(name, isDirectory: true)
+        try fm.createDirectory(at: url, withIntermediateDirectories: true)
+        let configURL = url.appendingPathComponent(FolderConfig.fileName)
+        if config != FolderConfig() || !fm.fileExists(atPath: configURL.path) {
+            try Frontmatter.yaml(config).write(to: configURL, atomically: true, encoding: .utf8)
+        }
+        Ownership.matchHome(root, url, configURL)
+        return Folder(name: name, url: url, config: config, noteCount: 0, unreadCount: 0)
+    }
+
+    public static func validateFolderName(_ name: String) throws {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_ "))
+        guard !name.isEmpty, !name.hasPrefix("_"), !name.hasPrefix("."), name.count <= 80,
+              name.unicodeScalars.allSatisfy(allowed.contains) else {
+            throw CotsError.invalidFolderName(name)
+        }
+    }
+
+    // MARK: Reading
+
+    public func notes(in folder: String? = nil, includeArchived: Bool = true) throws -> [Note] {
+        let folderNames = try folder.map { [$0] } ?? folders().map(\.name)
+        var result: [Note] = []
+        for name in folderNames {
+            let url = root.appendingPathComponent(name, isDirectory: true)
+            guard fm.fileExists(atPath: url.path) else { throw CotsError.folderNotFound(name) }
+            for noteURL in try noteURLs(in: url) {
+                if let note = try? loadNote(at: noteURL),
+                   includeArchived || note.meta.resolvedStatus != .archived {
+                    result.append(note)
+                }
+            }
+        }
+        return result.sorted { a, b in
+            if a.meta.isPinned != b.meta.isPinned { return a.meta.isPinned }
+            return Note.isOlder(b, a)
+        }
+    }
+
+    /// Accepts `folder/name`, `folder/name.md`, `folder/latest`, or a bare `name` searched across folders.
+    public func note(id rawID: String) throws -> Note {
+        let id = rawID.hasSuffix(".md") ? String(rawID.dropLast(3)) : rawID
+        let parts = id.split(separator: "/", maxSplits: 1).map(String.init)
+        if parts.count == 2 {
+            if parts[1] == "latest" {
+                guard let latest = try notes(in: parts[0]).max(by: Note.isOlder) else {
+                    throw CotsError.noteNotFound(rawID)
+                }
+                return latest
+            }
+            let url = root.appendingPathComponent(parts[0]).appendingPathComponent(parts[1] + ".md")
+            guard fm.fileExists(atPath: url.path) else { throw CotsError.noteNotFound(rawID) }
+            return try loadNote(at: url)
+        }
+        guard let match = try notes().first(where: { $0.url.deletingPathExtension().lastPathComponent == id }) else {
+            throw CotsError.noteNotFound(rawID)
+        }
+        return match
+    }
+
+    public func loadNote(at url: URL) throws -> Note {
+        let text = try String(contentsOf: url, encoding: .utf8)
+        let (yaml, body) = Frontmatter.split(text)
+        let folder = url.deletingLastPathComponent().lastPathComponent
+        let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
+        var meta = NoteMeta()
+        var parseError: String?
+        do {
+            meta = try Frontmatter.decodeMeta(Frontmatter.parse(yaml))
+        } catch {
+            parseError = String(describing: error)
+        }
+        return Note(id: "\(folder)/\(url.deletingPathExtension().lastPathComponent)", folder: folder, url: url,
+                    meta: meta, body: body, modified: modified, parseError: parseError)
+    }
+
+    public func search(_ query: String, in folder: String? = nil) throws -> [Note] {
+        let q = query.lowercased()
+        return try notes(in: folder).filter { note in
+            [note.title, note.meta.summary ?? "", note.body, (note.meta.tags ?? []).joined(separator: " ")]
+                .contains { $0.lowercased().contains(q) }
+        }
+    }
+
+    private func noteURLs(in folder: URL) throws -> [URL] {
+        try fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey],
+                                   options: [.skipsHiddenFiles])
+            .filter { $0.pathExtension == "md" && !$0.lastPathComponent.hasPrefix("_") }
+    }
+
+    // MARK: Writing
+
+    /// Creates a note. `frontmatter` may carry any keys; the folder's defaults fill
+    /// what's missing, and `created`/`status` are set if absent.
+    @discardableResult
+    public func create(folder: String, frontmatter input: Node = Frontmatter.emptyMapping, body: String) throws -> Note {
+        try Self.validateFolderName(folder)
+        let folderURL = root.appendingPathComponent(folder, isDirectory: true)
+        if !fm.fileExists(atPath: folderURL.path) { try createFolder(folder) }
+
+        var node = input
+        if let defaults = folderConfig(folder).defaults {
+            Frontmatter.merge(defaults: try Frontmatter.node(from: defaults), into: &node)
+        }
+        if node["created"] == nil { Frontmatter.set(Node(Timestamp.now()), at: ["created"], in: &node) }
+        if node["status"] == nil { Frontmatter.set(Node(NoteStatus.unread.rawValue), at: ["status"], in: &node) }
+
+        let meta = try Frontmatter.decodeMeta(node)
+        guard let title = meta.title?.trimmingCharacters(in: .whitespaces), !title.isEmpty else {
+            throw CotsError.invalidFrontmatter("falta 'title'")
+        }
+
+        let url = uniqueURL(in: folderURL, title: title, date: meta.createdDate ?? Date())
+        try Frontmatter.join(node: node, body: body).write(to: url, atomically: true, encoding: .utf8)
+        Ownership.matchHome(url)
+        return try loadNote(at: url)
+    }
+
+    /// Edits a note's frontmatter in place, keeping keys this app doesn't model.
+    @discardableResult
+    public func updateFrontmatter(_ id: String, touch: Bool = true, _ edit: (inout Node) throws -> Void) throws -> Note {
+        let note = try note(id: id)
+        let text = try String(contentsOf: note.url, encoding: .utf8)
+        let (yaml, body) = Frontmatter.split(text)
+        var node = try Frontmatter.parse(yaml)
+        try edit(&node)
+        if touch { Frontmatter.set(Node(Timestamp.now()), at: ["updated"], in: &node) }
+        _ = try Frontmatter.decodeMeta(node)
+        try Frontmatter.join(node: node, body: body).write(to: note.url, atomically: true, encoding: .utf8)
+        Ownership.matchHome(note.url)
+        return try loadNote(at: note.url)
+    }
+
+    @discardableResult
+    public func updateBody(_ id: String, body: String) throws -> Note {
+        let note = try note(id: id)
+        let text = try String(contentsOf: note.url, encoding: .utf8)
+        var node = try Frontmatter.parse(Frontmatter.split(text).yaml)
+        Frontmatter.set(Node(Timestamp.now()), at: ["updated"], in: &node)
+        try Frontmatter.join(node: node, body: body).write(to: note.url, atomically: true, encoding: .utf8)
+        Ownership.matchHome(note.url)
+        return try loadNote(at: note.url)
+    }
+
+    @discardableResult
+    public func setStatus(_ id: String, _ status: NoteStatus) throws -> Note {
+        try updateFrontmatter(id, touch: false) { Frontmatter.set(Node(status.rawValue), at: ["status"], in: &$0) }
+    }
+
+    /// Records the user's verdict on a plan and marks it read.
+    @discardableResult
+    public func setReview(_ id: String, _ status: ReviewStatus, comment: String?) throws -> Note {
+        try updateFrontmatter(id) { node in
+            Frontmatter.set(Node(status.rawValue), at: ["review", "status"], in: &node)
+            Frontmatter.set(comment.flatMap { $0.isEmpty ? nil : Node($0) }, at: ["review", "comment"], in: &node)
+            Frontmatter.set(Node(Timestamp.now()), at: ["review", "at"], in: &node)
+        }
+    }
+
+    /// nil removes the explicit color, falling back to the topic's / folder's.
+    @discardableResult
+    public func setColor(_ id: String, _ color: String?) throws -> Note {
+        try updateFrontmatter(id, touch: false) { Frontmatter.set(color.map { Node($0) }, at: ["display", "color"], in: &$0) }
+    }
+
+    @discardableResult
+    public func setPinned(_ id: String, _ pinned: Bool) throws -> Note {
+        try updateFrontmatter(id, touch: false) { Frontmatter.set(Node(pinned ? "true" : "false"), at: ["display", "pinned"], in: &$0) }
+    }
+
+    /// Appends a timestamped `## ` entry, the format the `log` style renders as a timeline.
+    @discardableResult
+    public func append(_ id: String, text: String, markUnread: Bool = true) throws -> Note {
+        let note = try note(id: id)
+        let stamp = DateFormatter.logHeading.string(from: Date())
+        var body = note.body.trimmingCharacters(in: .newlines)
+        body += (body.isEmpty ? "" : "\n\n") + "## \(stamp)\n\n" + text.trimmingCharacters(in: .newlines) + "\n"
+        _ = try updateBody(id, body: body)
+        if markUnread { return try setStatus(id, .unread) }
+        return try self.note(id: id)
+    }
+
+    public func trash(_ id: String) throws {
+        try fm.trashItem(at: note(id: id).url, resultingItemURL: nil)
+    }
+
+    /// Short names (`261102-1927.md`); the title lives in the frontmatter.
+    private func uniqueURL(in folder: URL, title: String, date: Date) -> URL {
+        let base = DateFormatter.fileStamp.string(from: date)
+        var url = folder.appendingPathComponent(base + ".md")
+        var n = 2
+        while fm.fileExists(atPath: url.path) {
+            url = folder.appendingPathComponent("\(base)-\(n).md")
+            n += 1
+        }
+        return url
+    }
+}
+
+extension DateFormatter {
+    static let fileStamp: DateFormatter = posix("yyMMdd-HHmm")
+    public static let logHeading: DateFormatter = posix("yyyy-MM-dd HH:mm")
+
+    private static func posix(_ format: String) -> DateFormatter {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = format
+        return f
+    }
+}
+
