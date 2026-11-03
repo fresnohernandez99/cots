@@ -30,9 +30,8 @@ struct CotsApp: App {
             MenuContentView()
                 .environment(model)
         } label: {
-            let unread = model.unreadCount
-            Image(systemName: unread > 0 ? "book.closed.fill" : "book.closed")
-            if unread > 0 { Text("\(unread)") }
+            StatusLabel()
+                .environment(model)
         }
         .menuBarExtraStyle(.window)
 

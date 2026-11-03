@@ -52,6 +52,10 @@ struct MenuContentView: View {
             }
         }
         .frame(width: 400, height: 560)
+        // Backup registration in case the status label's task hasn't run yet.
+        .onAppear {
+            StatusMenu.shared.install(model: model, openWindow: { openWindow(id: "main") }, openSettings: { openSettings() })
+        }
     }
 }
 

@@ -63,7 +63,9 @@ Los planes aprobados o rechazados pasan a gris, dentro de la subsección **Plane
 
 ## La app
 
-- **Popover:** búsqueda, chips de carpetas y topics, lista y detalle de cada nota. El botón ⤢ abre la vista ampliada.
+- **Icono de la barra de menú:**
+  - el clic izquierdo abre el popover: búsqueda, chips de carpetas y topics, lista y detalle de cada nota. El botón ⤢ abre la vista ampliada;
+  - el **clic derecho** (o ⌃clic) abre el menú general: Nueva nota, Abrir expandida, Abrir carpeta de notas, Ver archivadas, Mostrar planes terminados, Abrir al iniciar sesión, Ajustes y Salir.
 - **Vista ampliada:** barra lateral (Todas · Carpetas · Topics), lista y detalle. Mientras está abierta, coTs aparece en el Dock y en la barra de menús:
 
 | Menú | Atajos |
