@@ -38,7 +38,7 @@ final class IntegrationTests: XCTestCase {
 
     func testCLILinkFallsBackAndNeverClobbers() throws {
         #if os(Windows)
-        throw XCTSkip("The CLI link is a macOS integration; the Windows installer puts cots on the PATH")
+        try XCTSkipIf(true, "The CLI link is a macOS integration; the Windows installer puts cots on the PATH")
         #endif
         // The preferred folder doesn't exist and isn't under home, so it's skipped.
         let cli = CLIIntegration(env: env)
@@ -94,11 +94,14 @@ final class IntegrationTests: XCTestCase {
         XCTAssertEqual(settings["model"] as? String, "opus")
     }
 
+    /// Where Claude Desktop keeps its config on this platform, relative to the home.
+    let desktopConfig = "\(ClaudeDesktopIntegration.supportFolder)/Claude/claude_desktop_config.json"
+
     func testMalformedSettingsAreNeverOverwritten() throws {
         try write("{ esto no es json", to: ".claude/settings.json")
         XCTAssertThrowsError(try ClaudeCodeHooksIntegration(env: env).install())
         XCTAssertEqual(try String(contentsOf: env.home.appendingPathComponent(".claude/settings.json"), encoding: .utf8), "{ esto no es json")
-        try write("[1, 2]", to: "Library/Application Support/Claude/claude_desktop_config.json")
+        try write("[1, 2]", to: desktopConfig)
         XCTAssertThrowsError(try ClaudeDesktopIntegration(env: env).install())
     }
 
@@ -109,16 +112,16 @@ final class IntegrationTests: XCTestCase {
         XCTAssertFalse(desktop.isInstalled)
 
         try write(#"{"mcpServers": {"other": {"command": "x"}}, "theme": "dark"}"#,
-                  to: "Library/Application Support/Claude/claude_desktop_config.json")
+                  to: desktopConfig)
         XCTAssertTrue(desktop.installsOnFirstLaunch)
         _ = Integrations.setUp([desktop], firstLaunch: true)
         XCTAssertTrue(desktop.isInstalled)
-        let config = try json("Library/Application Support/Claude/claude_desktop_config.json")
+        let config = try json(desktopConfig)
         let servers = try XCTUnwrap(config["mcpServers"] as? [String: [String: Any]])
         XCTAssertEqual(servers["cots"]?["args"] as? [String], ["mcp"])
         XCTAssertNotNil(servers["other"])
         XCTAssertEqual(config["theme"] as? String, "dark")
-        XCTAssertTrue(desktop.manualConfig.contains(env.bundledCLI!.path))
+        XCTAssertTrue(desktop.manualConfig.contains(commandPath(env.bundledCLI!)))
     }
 
     func testLaunchSetupInstallsOnceThenOnlyRefreshes() throws {
