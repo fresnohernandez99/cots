@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds build/coTs.app (menu bar app + bundled `cots` CLI), ad-hoc signed.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../../.."
 
 VERSION="0.6.0"
 swift build -c release
@@ -12,9 +12,9 @@ rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "$BIN/CotsApp" "$APP/Contents/MacOS/coTs"
 cp "$BIN/cots" "$APP/Contents/Resources/cots"
-cp -R skill/cots "$APP/Contents/Resources/skill"
-cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
-cp -R Resources/en.lproj Resources/es.lproj "$APP/Contents/Resources/"
+cp -R skills/cots "$APP/Contents/Resources/skill"
+cp apps/macos/Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+cp -R apps/macos/Resources/en.lproj apps/macos/Resources/es.lproj "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

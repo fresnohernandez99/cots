@@ -1,4 +1,6 @@
-// Renders Resources/AppIcon.icns. Run: swift scripts/make-icon.swift
+// Renders the app icon: build/AppIcon.iconset (turn into apps/macos/Resources/AppIcon.icns with
+// `iconutil -c icns`) and assets/AppIcon-1024.png, the source for the Windows icons.
+// Run from the repo root: swift apps/macos/scripts/make-icon.swift
 import AppKit
 import CoreGraphics
 import CoreText
@@ -80,5 +82,5 @@ for base in [16, 32, 128, 256, 512] {
     }
 }
 try NSBitmapImageRep(cgImage: render(1024)).representation(using: .png, properties: [:])!
-    .write(to: root.appendingPathComponent("Resources/AppIcon-1024.png"))
+    .write(to: root.appendingPathComponent("assets/AppIcon-1024.png"))
 print(iconset.path)

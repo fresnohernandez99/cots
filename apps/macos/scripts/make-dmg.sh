@@ -1,9 +1,9 @@
 #!/bin/bash
 # Builds build/coTs-<version>.dmg: the app next to an Applications shortcut, to drag and drop.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../../.."
 
-./scripts/build-app.sh
+apps/macos/scripts/build-app.sh
 VERSION=$(/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" build/coTs.app/Contents/Info.plist)
 STAGE="build/dmg"
 DMG="build/coTs-$VERSION.dmg"

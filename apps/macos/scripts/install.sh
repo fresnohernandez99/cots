@@ -2,9 +2,9 @@
 # Dev shortcut: build and copy to /Applications. On first launch the app installs
 # the CLI and the skill itself (same path as dragging it from the DMG).
 set -euo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/../../.."
 
-./scripts/build-app.sh
+apps/macos/scripts/build-app.sh
 APPS="/Applications"; [ -w "$APPS" ] || APPS="$HOME/Applications"
 mkdir -p "$APPS"
 pkill -x coTs 2>/dev/null || true
