@@ -46,3 +46,32 @@ extension Note {
         meta.topic?.caseInsensitiveCompare(topic) == .orderedSame
     }
 }
+
+/// What's left to do: notes with open tasks and plans awaiting the user. Shared by
+/// `cots pending` and the MCP `list_pending` tool so both answer the same way.
+public struct PendingReport {
+    public let project: String?
+    public let items: [(note: Note, tasks: [String])]
+
+    /// `project` nil means every project.
+    public init(store: NoteStore, project: String?) throws {
+        self.project = project
+        var notes = try store.notes(includeArchived: false)
+        if let project { notes = notes.filter { $0.belongs(toTopic: project) } }
+        items = notes.compactMap { note in
+            let tasks = note.openTasks
+            return tasks.isEmpty && !note.awaitsReview ? nil : (note, tasks)
+        }
+    }
+
+    public var text: String {
+        var out = project.map { "Pendientes de \($0)" } ?? "Pendientes de todos los proyectos"
+        if items.isEmpty { return out + "\nNada pendiente." }
+        for (note, tasks) in items {
+            out += "\n\n\(note.id)  \(project == nil ? note.meta.topic.map { "[\($0)] " } ?? "" : "")\(note.title)"
+            if note.awaitsReview { out += note.meta.review?.resolvedStatus == .changes ? " (cambios pedidos)" : " (plan por revisar)" }
+            for task in tasks { out += "\n  - [ ] \(task)" }
+        }
+        return out
+    }
+}

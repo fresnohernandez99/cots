@@ -99,6 +99,9 @@ public final class MCPServer {
             }
             return lines.isEmpty ? "Sin notas." : lines.joined(separator: "\n")
 
+        case "list_pending":
+            return try PendingReport(store: store, project: a["topic"] as? String).text
+
         case "read_note":
             let note = try store.note(id: try string(a, "id"))
             var out = "# \(note.title)\nid: \(note.id)\(note.meta.topic.map { " · topic: \($0)" } ?? "")\n"
@@ -193,6 +196,9 @@ public final class MCPServer {
             "unread_only": prop("boolean", "Solo no leídas."),
             "include_archived": prop("boolean", "Incluir archivadas."),
             "limit": prop("integer", "Máximo de notas (20 por defecto)."),
+        ], readOnly: true),
+        tool("list_pending", "Lo que queda por hacer: tareas `- [ ]` sin marcar y planes por revisar. Si sabes en qué proyecto trabaja el usuario, pásalo en topic y responde solo con ese.", [
+            "topic": prop("string", "Proyecto. Todos si se omite."),
         ], readOnly: true),
         tool("search_notes", "Busca texto en título, summary, tags y contenido.", [
             "query": prop("string", "Texto a buscar."),
