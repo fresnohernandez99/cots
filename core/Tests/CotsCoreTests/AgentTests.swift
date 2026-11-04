@@ -94,3 +94,30 @@ final class AgentTests: XCTestCase {
         XCTAssertNil(hooks.sessionStart(["session_id": "newer", "cwd": repo!]))
     }
 }
+
+final class PendingTests: XCTestCase {
+    func testOpenTasksSkipCheckedAndCode() throws {
+        let store = NoteStore(root: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+        try store.ensureRoot()
+        let body = "- [ ] uno\n  * [ ] dos anidada\n- [x] hecha\n```\n- [ ] ejemplo\n```\n+ [ ] tres"
+        var draft = NoteDraft(body: body)
+        draft.title = "Tareas"
+        let note = try store.create(draft)
+        XCTAssertEqual(note.openTasks, ["uno", "dos anidada", "tres"])
+
+        let (checked, ticked) = note.checkingTasks { $0.contains("dos") }
+        XCTAssertEqual(ticked, ["dos anidada"])
+        XCTAssertEqual(checked, note.body.replacingOccurrences(of: "* [ ] dos", with: "* [x] dos"))
+    }
+
+    func testPlansAwaitReviewUntilDecided() throws {
+        let store = NoteStore(root: FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString))
+        try store.ensureRoot()
+        var draft = NoteDraft.plan(title: "P", body: "x")
+        draft.topic = "Shop-API"
+        let plan = try store.create(draft)
+        XCTAssertTrue(plan.awaitsReview)
+        XCTAssertTrue(plan.belongs(toTopic: "shop-api"))
+        XCTAssertFalse(try store.setReview(plan.id, .approved, comment: nil).awaitsReview)
+    }
+}

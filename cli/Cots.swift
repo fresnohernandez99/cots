@@ -15,7 +15,7 @@ struct Cots: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "cots",
         abstract: "Notas en Markdown que humanos e IAs comparten. La app de la barra de menú lee la misma carpeta.",
-        subcommands: [Add.self, Plan.self, Wait.self, Review.self, Hook.self, MCP.self, Append.self, List.self, Read.self, Search.self, SetCmd.self,
+        subcommands: [Add.self, Plan.self, Wait.self, Review.self, Hook.self, MCP.self, Append.self, List.self, Pending.self, Check.self, Read.self, Search.self, SetCmd.self,
                       Folders.self, FolderCmd.self, Mkdir.self, Schema_.self, Root.self]
     )
 }
@@ -30,6 +30,22 @@ struct StoreOptions: ParsableArguments {
         let store = root.map { NoteStore(root: URL(fileURLWithPath: ($0 as NSString).expandingTildeInPath)) } ?? NoteStore()
         try store.ensureRoot()
         return store
+    }
+}
+
+/// Which project's notes to show. `--here` means the project of the current directory
+/// (git repo, else folder in the home), and every project when it isn't inside one.
+struct ProjectOptions: ParsableArguments {
+    @Option(help: "Solo notas de este proyecto.") var topic: String?
+    @Flag(help: "Solo notas del proyecto del directorio actual (todas si no estás en uno).") var here = false
+
+    var resolved: String? {
+        topic ?? (here ? Topic.detect(cwd: FileManager.default.currentDirectoryPath) : nil)
+    }
+
+    func filter(_ notes: [Note]) -> [Note] {
+        guard let topic = resolved else { return notes }
+        return notes.filter { $0.belongs(toTopic: topic) }
     }
 }
 
