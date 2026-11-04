@@ -7,24 +7,38 @@ final class NoteCache: @unchecked Sendable {
     struct Stamp: Equatable {
         var inode: UInt64
         var size: Int64
-        var mtime: timespec
-
-        static func == (a: Stamp, b: Stamp) -> Bool {
-            a.inode == b.inode && a.size == b.size && a.mtime.tv_sec == b.mtime.tv_sec && a.mtime.tv_nsec == b.mtime.tv_nsec
-        }
+        var seconds: Int
+        var nanoseconds: Int
 
         /// Read with `stat` rather than `URL.resourceValues`, which caches values per URL
         /// and would miss a write made through the same URL.
         init?(path: String) {
+            #if os(Windows)
+            // No inodes there; size and modification time (100 ns resolution) are enough.
+            guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+                  let date = attrs[.modificationDate] as? Date else { return nil }
+            let time = date.timeIntervalSince1970
+            inode = 0
+            size = (attrs[.size] as? NSNumber)?.int64Value ?? 0
+            seconds = Int(time.rounded(.down))
+            nanoseconds = Int((time - time.rounded(.down)) * 1_000_000_000)
+            #else
             var info = stat()
             guard stat(path, &info) == 0 else { return nil }
             inode = UInt64(info.st_ino)
             size = Int64(info.st_size)
-            mtime = info.st_mtimespec
+            #if canImport(Darwin)
+            seconds = Int(info.st_mtimespec.tv_sec)
+            nanoseconds = Int(info.st_mtimespec.tv_nsec)
+            #else
+            seconds = Int(info.st_mtim.tv_sec)
+            nanoseconds = Int(info.st_mtim.tv_nsec)
+            #endif
+            #endif
         }
 
         var modified: Date {
-            Date(timeIntervalSince1970: TimeInterval(mtime.tv_sec) + TimeInterval(mtime.tv_nsec) / 1_000_000_000)
+            Date(timeIntervalSince1970: TimeInterval(seconds) + TimeInterval(nanoseconds) / 1_000_000_000)
         }
     }
 

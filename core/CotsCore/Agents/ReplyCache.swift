@@ -28,7 +28,7 @@ public struct ReplyCache: Sendable {
 
     /// Next to the app's other caches, under the user's home.
     public static var standard: ReplyCache {
-        ReplyCache(directory: CotsConfig.home.appendingPathComponent("Library/Caches/\(CotsConfig.bundleID)/replies", isDirectory: true))
+        ReplyCache(directory: CotsConfig.cacheDirectory.appendingPathComponent("replies", isDirectory: true))
     }
 
     public func store(_ reply: CachedReply) throws {

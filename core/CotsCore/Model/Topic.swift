@@ -5,9 +5,11 @@ public enum Topic {
     public static func detect(cwd: String) -> String? {
         var url = URL(fileURLWithPath: cwd, isDirectory: true).standardizedFileURL
         let start = url
-        while url.path != "/" {
+        while true {
             if FileManager.default.fileExists(atPath: url.appendingPathComponent(".git").path) { return url.lastPathComponent }
-            url.deleteLastPathComponent()
+            let parent = url.deletingLastPathComponent().standardizedFileURL
+            if parent.path == url.path || url.pathComponents.count <= 1 { break } // "/" or "C:\"
+            url = parent
         }
         // Without a repo, only folders inside the user's home count as projects
         // (not /tmp, /usr, ...).

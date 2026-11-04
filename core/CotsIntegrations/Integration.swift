@@ -42,6 +42,16 @@ public struct IntegrationEnvironment: Sendable {
 
     /// `/usr/local/bin` is on every shell's PATH. `COTS_BIN_DIR` confines the link to one
     /// folder, so an isolated test install can't touch the real one.
+    /// For `cots setup` run from an app that ships the CLI next to its `skill` folder
+    /// (the Windows app). The CLI itself goes on the PATH through the installer there.
+    public static func cli(executable: URL) -> IntegrationEnvironment {
+        let exe = executable.resolvingSymlinksInPath()
+        let skill = exe.deletingLastPathComponent().appendingPathComponent("skill", isDirectory: true)
+        return IntegrationEnvironment(home: CotsConfig.home, bundledCLI: exe,
+                                      bundledSkill: FileManager.default.fileExists(atPath: skill.path) ? skill : nil,
+                                      binDirectories: [])
+    }
+
     public static func current(bundle: Bundle = .main) -> IntegrationEnvironment {
         let home = CotsConfig.home
         let bins: [URL]
@@ -63,7 +73,9 @@ public struct IntegrationError: LocalizedError {
 public enum Integrations {
     /// In the order Settings shows them.
     public static func all(_ env: IntegrationEnvironment) -> [any Integration] {
-        [CLIIntegration(env: env), SkillIntegration(env: env), ClaudeCodeHooksIntegration(env: env), ClaudeDesktopIntegration(env: env)]
+        // Without bin directories (the Windows app) the installer puts the CLI on the PATH.
+        let cli: [any Integration] = env.binDirectories.isEmpty ? [] : [CLIIntegration(env: env)]
+        return cli + [SkillIntegration(env: env), ClaudeCodeHooksIntegration(env: env), ClaudeDesktopIntegration(env: env)]
     }
 
     /// The first launch installs everything; later launches refresh what's installed, so
@@ -93,6 +105,14 @@ func readJSONObject(_ url: URL, name: String) throws -> [String: Any]? {
         throw IntegrationError("\(name) no es un objeto JSON; no lo toco")
     }
     return object
+}
+
+/// A path to write into a config another program runs: forward slashes, which both
+/// cmd and the Git Bash that Claude Code uses on Windows accept.
+func commandPath(_ url: URL) -> String {
+    var path = url.path.replacingOccurrences(of: "\\", with: "/")
+    if path.count > 2, path.hasPrefix("/"), path.dropFirst(2).hasPrefix(":") { path.removeFirst() } // "/C:/…"
+    return path
 }
 
 func writeJSONObject(_ object: [String: Any], to url: URL) throws {

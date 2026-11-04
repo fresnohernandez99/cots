@@ -16,7 +16,7 @@ struct Cots: ParsableCommand {
         commandName: "cots",
         abstract: "Notas en Markdown que humanos e IAs comparten. La app de la barra de menú lee la misma carpeta.",
         subcommands: [Add.self, Plan.self, Wait.self, Review.self, Hook.self, MCP.self, Append.self, List.self, Pending.self, Check.self, Read.self, Search.self, SetCmd.self,
-                      Folders.self, FolderCmd.self, Mkdir.self, Schema_.self, Root.self]
+                      Folders.self, FolderCmd.self, Mkdir.self, Schema_.self, Root.self, Setup.self]
     )
 }
 
@@ -52,10 +52,15 @@ struct ProjectOptions: ParsableArguments {
 /// Reads stdin only when it's a pipe or a redirected file. Agents often run commands
 /// with an open-but-silent stdin, and blocking on it would hang them.
 func readStdinIfPiped() -> String? {
+    #if os(Windows)
+    // A console means nobody is piping anything in.
+    guard _isatty(0) == 0 else { return nil }
+    #else
     var info = stat()
     guard fstat(FileHandle.standardInput.fileDescriptor, &info) == 0 else { return nil }
     let type = info.st_mode & S_IFMT
     guard type == S_IFIFO || type == S_IFREG else { return nil }
+    #endif
     let data = FileHandle.standardInput.readDataToEndOfFile()
     let text = String(decoding: data, as: UTF8.self)
     return text.isEmpty ? nil : text

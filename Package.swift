@@ -19,7 +19,7 @@ let package = Package(
         .target(name: "CotsCore", dependencies: ["Yams"], path: "core/CotsCore"),
         .executableTarget(
             name: "cots",
-            dependencies: ["CotsCore", .product(name: "ArgumentParser", package: "swift-argument-parser")],
+            dependencies: ["CotsCore", "CotsIntegrations", .product(name: "ArgumentParser", package: "swift-argument-parser")],
             path: "cli"
         ),
         .target(name: "CotsIntegrations", dependencies: ["CotsCore"], path: "core/CotsIntegrations"),

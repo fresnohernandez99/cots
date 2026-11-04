@@ -276,7 +276,19 @@ public final class NoteStore: @unchecked Sendable {
     }
 
     public func trash(_ id: String) throws {
-        try fm.trashItem(at: note(id: id).url, resultingItemURL: nil)
+        let url = try note(id: id).url
+        #if canImport(Darwin)
+        try fm.trashItem(at: url, resultingItemURL: nil)
+        #else
+        // Foundation has no Recycle Bin elsewhere: keep it under `.trash`, hidden from
+        // every listing, so a deleted note can still be recovered by hand.
+        let bin = root.appendingPathComponent(".trash", isDirectory: true)
+            .appendingPathComponent(url.deletingLastPathComponent().lastPathComponent, isDirectory: true)
+        try fm.createDirectory(at: bin, withIntermediateDirectories: true)
+        var dest = bin.appendingPathComponent(url.lastPathComponent)
+        if fm.fileExists(atPath: dest.path) { dest = bin.appendingPathComponent("\(UUID().uuidString)-\(url.lastPathComponent)") }
+        try fm.moveItem(at: url, to: dest)
+        #endif
     }
 
     /// Short names (`261102-1927.md`); the title lives in the frontmatter.

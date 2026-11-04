@@ -139,4 +139,23 @@ final class IntegrationTests: XCTestCase {
         let errors = Integrations.setUp([CLIIntegration(env: env), ClaudeCodeHooksIntegration(env: env)], firstLaunch: true)
         XCTAssertEqual(errors.count, 2)
     }
+
+    func testWindowsAppSetupSkipsTheLinkAndRecognizesExeHooks() throws {
+        var windows = env!
+        windows.binDirectories = []
+        XCTAssertFalse(Integrations.all(windows).contains { $0 is CLIIntegration })
+
+        // A hook written by the Windows app (forward slashes, .exe) is still ours.
+        let settings = env.home.appendingPathComponent(".claude/settings.json")
+        try fm.createDirectory(at: settings.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let command = #""C:/Program Files/coTs/cots.exe" hook claude-stop"#
+        try #"{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"\#(command.replacingOccurrences(of: "\"", with: "\\\""))"}]}]}}"#
+            .write(to: settings, atomically: true, encoding: .utf8)
+        let hooks = ClaudeCodeHooksIntegration(env: windows)
+        XCTAssertTrue(hooks.isPartlyInstalled)
+        hooks.remove()
+        XCTAssertFalse(hooks.isPartlyInstalled)
+
+        XCTAssertEqual(commandPath(URL(fileURLWithPath: "/C:/Program Files/coTs/cots.exe")), "C:/Program Files/coTs/cots.exe")
+    }
 }

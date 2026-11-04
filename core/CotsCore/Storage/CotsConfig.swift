@@ -14,6 +14,25 @@ public enum CotsConfig {
         return FileManager.default.homeDirectoryForCurrentUser
     }
 
+    /// Per-user caches: `~/Library/Caches/<bundle id>` on macOS, `%LOCALAPPDATA%\coTs`
+    /// on Windows, `$XDG_CACHE_HOME/cots` (or `~/.cache/cots`) elsewhere.
+    public static var cacheDirectory: URL {
+        #if os(macOS)
+        return home.appendingPathComponent("Library/Caches/\(bundleID)", isDirectory: true)
+        #else
+        let env = ProcessInfo.processInfo.environment
+        #if os(Windows)
+        if let local = env["LOCALAPPDATA"], !local.isEmpty {
+            return URL(fileURLWithPath: local, isDirectory: true).appendingPathComponent("coTs", isDirectory: true)
+        }
+        #endif
+        if let xdg = env["XDG_CACHE_HOME"], !xdg.isEmpty {
+            return URL(fileURLWithPath: xdg, isDirectory: true).appendingPathComponent("cots", isDirectory: true)
+        }
+        return home.appendingPathComponent(".cache/cots", isDirectory: true)
+        #endif
+    }
+
     public static var configURL: URL { home.appendingPathComponent(".config/cots/config.json") }
 
     public static var defaultRoot: URL { home.appendingPathComponent("coTs", isDirectory: true) }

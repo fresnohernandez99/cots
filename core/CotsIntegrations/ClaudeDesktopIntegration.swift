@@ -9,7 +9,15 @@ public struct ClaudeDesktopIntegration: Integration {
     public var title: String { "Claude Desktop (MCP)" }
     public var location: String? { "claude_desktop_config.json" }
 
-    var configURL: URL { env.home.appendingPathComponent("Library/Application Support/Claude/claude_desktop_config.json") }
+    var configURL: URL { env.home.appendingPathComponent("\(Self.supportFolder)/Claude/claude_desktop_config.json") }
+
+    #if os(macOS)
+    static let supportFolder = "Library/Application Support"
+    #elseif os(Windows)
+    static let supportFolder = "AppData/Roaming" // %APPDATA%
+    #else
+    static let supportFolder = ".config"
+    #endif
 
     /// Claude Desktop creates its support folder on first run; without it there's nothing to configure.
     public var installsOnFirstLaunch: Bool {
@@ -22,7 +30,7 @@ public struct ClaudeDesktopIntegration: Integration {
 
     public func install() throws {
         guard let cli = env.bundledCLI else { throw IntegrationError("El bundle no incluye el CLI") }
-        try edit { $0["cots"] = ["command": cli.path, "args": ["mcp"]] }
+        try edit { $0["cots"] = ["command": commandPath(cli), "args": ["mcp"]] }
     }
 
     public func remove() {
@@ -40,7 +48,7 @@ public struct ClaudeDesktopIntegration: Integration {
 
     /// What to paste into ChatGPT (Settings → Plugins → add MCP server) or any other MCP client.
     public var manualConfig: String {
-        let path = env.bundledCLI?.path ?? "/Applications/coTs.app/Contents/Resources/cots"
+        let path = env.bundledCLI.map(commandPath) ?? "/Applications/coTs.app/Contents/Resources/cots"
         return """
         {
           "mcpServers": {

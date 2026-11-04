@@ -15,6 +15,10 @@ public struct TextMatcher: Sendable {
     public func matches(_ text: String) -> Bool {
         guard !query.isEmpty else { return true }
         guard ascii else { return text.lowercased().contains(query) }
+        #if os(Windows)
+        return text.range(of: query, options: .caseInsensitive) != nil
+        #else
         return text.withCString { hay in query.withCString { strcasestr(hay, $0) != nil } }
+        #endif
     }
 }

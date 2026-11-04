@@ -75,11 +75,31 @@ public struct ClaudeCodeHooks {
     }
 }
 
+public enum Executable {
+    /// First `name` on the PATH (`name.exe` on Windows), like a shell would run it.
+    public static func find(_ name: String) -> URL? {
+        let env = ProcessInfo.processInfo.environment
+        #if os(Windows)
+        let separator: Character = ";"
+        let file = name.hasSuffix(".exe") ? name : name + ".exe"
+        let path = env["Path"] ?? env["PATH"] ?? ""
+        #else
+        let separator: Character = ":"
+        let file = name
+        let path = env["PATH"] ?? "/usr/bin:/bin:/usr/local/bin:/opt/homebrew/bin"
+        #endif
+        return path.split(separator: separator).lazy
+            .map { URL(fileURLWithPath: String($0), isDirectory: true).appendingPathComponent(file) }
+            .first { FileManager.default.isExecutableFile(atPath: $0.path) }
+    }
+}
+
 public enum Git {
     /// Current branch of the repository containing `cwd`, nil outside a repo.
     public static func branch(_ cwd: String) -> String? {
+        guard let git = Executable.find("git") else { return nil }
         let p = Process()
-        p.executableURL = URL(fileURLWithPath: "/usr/bin/git")
+        p.executableURL = git
         p.arguments = ["-C", cwd, "rev-parse", "--abbrev-ref", "HEAD"]
         let pipe = Pipe()
         p.standardOutput = pipe

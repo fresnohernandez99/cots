@@ -20,7 +20,8 @@ public struct ClaudeCodeHooksIntegration: Integration {
     public var isPartlyInstalled: Bool { !installedEvents.isEmpty }
 
     private func isOurs(_ entry: [String: Any]) -> Bool {
-        (entry["command"] as? String)?.contains("/cots\" hook claude-") == true
+        guard let command = entry["command"] as? String else { return false }
+        return command.contains("/cots\" hook claude-") || command.contains("/cots.exe\" hook claude-")
     }
 
     var installedEvents: [String] {
@@ -35,7 +36,7 @@ public struct ClaudeCodeHooksIntegration: Integration {
     public func install() throws {
         guard let cli = env.bundledCLI else { throw IntegrationError("El bundle no incluye el CLI") }
         try edit { sub, groups in
-            groups + [["hooks": [["type": "command", "command": "\"\(cli.path)\" hook \(sub)", "timeout": 10]]]]
+            groups + [["hooks": [["type": "command", "command": "\"\(commandPath(cli))\" hook \(sub)", "timeout": 10]]]]
         }
     }
 
