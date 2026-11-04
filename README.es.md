@@ -214,9 +214,10 @@ COTS_HOME=/tmp/cots-fx/notes .build/debug/CotsApp --snapshot /tmp/cots-fx/shots 
 
 | Ruta | Contenido |
 |---|---|
-| `Sources/CotsCore` | Formato, parser YAML, almacenamiento, topics, sesiones, caché de respuestas. Se reutilizará en la app de iOS. |
-| `Sources/CLI` | `cots` y los puntos de entrada de los hooks (`cots hook claude-stop`, `claude-prompt`, `claude-session-start`, `claude-session-end`). |
-| `Sources/App` | App SwiftUI: popover, ventana, ajustes, comandos de menú, notificaciones, integraciones y desinstalador. |
+| `Sources/CotsCore` | `Model` (tipos de nota), `Format` (frontmatter YAML), `Storage` (repositorio, caché de notas, `NoteDraft`) y `Agents` (sesiones, caché de respuestas, hooks de Claude Code, servidor MCP). Se reutilizará en la app de iOS. |
+| `Sources/CotsIntegrations` | Lo que la app instala para las IAs (enlace del CLI, skill, hooks de Claude Code, MCP de Claude Desktop), cada uno con instalar, quitar y estado. |
+| `Sources/CLI` | `cots`, un archivo por comando en `Commands/`. |
+| `Sources/App` | App SwiftUI: `Model` (`NotesStore` para los datos, `Browser` para filtros y selección), `Popover`, `Window`, `Settings`, `Components`. |
 | `skill/cots/SKILL.md` | Skill en formato abierto Agent Skills. |
 | `Resources` | Icono y traducciones (`es` es el idioma base, `en`). |
 
