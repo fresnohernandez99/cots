@@ -176,7 +176,7 @@ struct NoteDetailView: View {
                     Button("Reabrir") { decide(note, .pending) }.controlSize(.small)
                 }
             }
-            TextField("Comentario para la IA (opcional)", text: $reviewComment, axis: .vertical)
+            TextField("Comentario para la IA (obligatorio para pedir cambios)", text: $reviewComment, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(1...4)
             HStack {
@@ -184,6 +184,8 @@ struct NoteDetailView: View {
                     .tint(.red)
                 Button { decide(note, .changes) } label: { Label("Pedir cambios", systemImage: "arrow.triangle.2.circlepath") }
                     .tint(Palette.amberFill)
+                    // The agent needs to know what to change; same rule as on Windows.
+                    .disabled(reviewComment.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 Spacer()
                 Button { decide(note, .approved) } label: { Label("Aprobar", systemImage: "checkmark") }
                     .tint(.green)

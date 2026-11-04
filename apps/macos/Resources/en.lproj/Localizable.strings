@@ -27,7 +27,7 @@
 "Código" = "Code";
 "Código de salida: %lld" = "Exit code: %lld";
 "Color" = "Color";
-"Comentario para la IA (opcional)" = "Comment for the AI (optional)";
+"Comentario para la IA (obligatorio para pedir cambios)" = "Comment for the AI (required to request changes)";
 "Contexto" = "Context";
 "Contexto IA" = "AI context";
 "Copiar" = "Copy";
