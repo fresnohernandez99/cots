@@ -179,7 +179,7 @@ struct NoteDetailView: View {
                 Button { decide(note, .rejected) } label: { Label("Rechazar", systemImage: "xmark") }
                     .tint(.red)
                 Button { decide(note, .changes) } label: { Label("Pedir cambios", systemImage: "arrow.triangle.2.circlepath") }
-                    .tint(.orange)
+                    .tint(Palette.amberFill)
                 Spacer()
                 Button { decide(note, .approved) } label: { Label("Aprobar", systemImage: "checkmark") }
                     .tint(.green)

@@ -39,7 +39,7 @@ extension ReviewStatus {
         switch self {
         case .pending: return .orange
         case .approved: return .green
-        case .changes: return .yellow
+        case .changes: return Palette.amber
         case .rejected: return .red
         }
     }

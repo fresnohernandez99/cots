@@ -57,6 +57,17 @@ enum Palette {
         return Image(nsImage: image)
     }
 
+    /// Amber that reads as text: dark in light mode, light in dark mode (≥ 4.5:1 on the
+    /// window background either way). System yellow and orange are too pale for text.
+    static let amber = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(srgbRed: 1, green: 0.702, blue: 0.251, alpha: 1)
+            : NSColor(srgbRed: 0.698, green: 0.314, blue: 0, alpha: 1)
+    })
+
+    /// Amber fill for prominent buttons with white text (5.2:1), in both modes.
+    static let amberFill = Color(nsColor: NSColor(srgbRed: 0.698, green: 0.314, blue: 0, alpha: 1))
+
     /// Deterministic across launches (unlike `hashValue`), so a project keeps its color.
     static func topicColor(_ topic: String) -> Color {
         let hash = topic.lowercased().unicodeScalars.reduce(UInt32(5381)) { ($0 &<< 5) &+ $0 &+ $1.value }
