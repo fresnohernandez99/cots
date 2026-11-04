@@ -9,13 +9,15 @@ import SwiftUI
 final class StatusMenu: NSObject {
     static let shared = StatusMenu()
 
-    private weak var model: AppModel?
+    private weak var store: NotesStore?
+    private weak var browser: Browser?
     private var openWindow: (() -> Void)?
     private var openSettings: (() -> Void)?
     private var monitor: Any?
 
-    func install(model: AppModel, openWindow: @escaping () -> Void, openSettings: @escaping () -> Void) {
-        self.model = model
+    func install(store: NotesStore, browser: Browser, openWindow: @escaping () -> Void, openSettings: @escaping () -> Void) {
+        self.store = store
+        self.browser = browser
         self.openWindow = openWindow
         self.openSettings = openSettings
         guard monitor == nil else { return }
@@ -30,19 +32,19 @@ final class StatusMenu: NSObject {
     private func menu() -> NSMenu {
         let menu = NSMenu()
         menu.addItem(item("Nueva nota", symbol: "square.and.pencil") { [weak self] in
-            self?.model?.showingNewNote = true
+            self?.browser?.showingNewNote = true
             self?.showWindow()
         })
         menu.addItem(item("Abrir expandida", symbol: "arrow.up.left.and.arrow.down.right") { [weak self] in self?.showWindow() })
         menu.addItem(item("Abrir carpeta de notas", symbol: "folder") { [weak self] in
-            if let root = self?.model?.store.root { NSWorkspace.shared.open(root) }
+            if let root = self?.store?.disk.root { NSWorkspace.shared.open(root) }
         })
         menu.addItem(.separator())
-        menu.addItem(item("Ver archivadas", checked: model?.showArchived == true) { [weak self] in
-            self?.model?.showArchived.toggle()
+        menu.addItem(item("Ver archivadas", checked: browser?.showArchived == true) { [weak self] in
+            self?.browser?.showArchived.toggle()
         })
-        menu.addItem(item("Mostrar planes terminados", checked: model?.showFinishedPlans == true) { [weak self] in
-            self?.model?.showFinishedPlans.toggle()
+        menu.addItem(item("Mostrar planes terminados", checked: browser?.showFinishedPlans == true) { [weak self] in
+            self?.browser?.showFinishedPlans.toggle()
         })
         menu.addItem(item("Abrir al iniciar sesión", checked: SMAppService.mainApp.status == .enabled) {
             if SMAppService.mainApp.status == .enabled {
@@ -93,26 +95,27 @@ private final class ClosureMenuItem: NSMenuItem {
 /// The menu bar icon. It's the one view that exists for the app's whole lifetime, so it
 /// hands the scene's `openWindow` / `openSettings` actions to the right-click menu.
 struct StatusLabel: View {
-    @Environment(AppModel.self) private var model
+    @Environment(NotesStore.self) private var store
+    @Environment(Browser.self) private var browser
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         // Same Image + Text shape as before: the status item renders a flat label best.
-        let unread = model.unreadCount
+        let unread = store.unreadCount
         Image(systemName: unread > 0 ? "book.closed.fill" : "book.closed")
             .task { register() }
         if unread > 0 { Text(verbatim: "\(unread)") }
     }
 
     func register() {
-        StatusMenu.shared.install(model: model,
+        StatusMenu.shared.install(store: store, browser: browser,
                                  openWindow: { openWindow(id: "main") },
                                  openSettings: { openSettings() })
-        let model = model
+        let store = store, browser = browser
         Notifier.shared.onOpen = { id in
-            model.showSessions = model.sessionNotes.contains { $0.id == id }
-            model.windowSelection = id
+            browser.showSessions = store.sessionNotes.contains { $0.id == id }
+            browser.windowSelection = id
             StatusMenu.shared.showWindow()
         }
     }

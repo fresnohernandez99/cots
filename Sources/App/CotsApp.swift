@@ -5,7 +5,8 @@ import SwiftUI
 
 @main
 struct CotsApp: App {
-    @State private var model = AppModel()
+    @State private var store: NotesStore
+    @State private var browser = Browser()
 
     init() {
         if CommandLine.arguments.contains("--unregister-login-item") {
@@ -26,6 +27,10 @@ struct CotsApp: App {
                .contains(where: { $0.processIdentifier != getpid() }) {
             exit(0)
         }
+        let store = NotesStore()
+        let browser = _browser.wrappedValue
+        store.didReload = { browser.prune(against: store) }
+        _store = State(initialValue: store)
         Self.registerLoginItemOnFirstLaunch()
         LaunchSetup.run()
         Uninstaller.cleanUpLegacy()
@@ -37,23 +42,23 @@ struct CotsApp: App {
     var body: some Scene {
         MenuBarExtra {
             MenuContentView()
-                .environment(model)
+                .environment(store).environment(browser)
         } label: {
             StatusLabel()
-                .environment(model)
+                .environment(store).environment(browser)
         }
         .menuBarExtraStyle(.window)
 
         Window("coTs", id: "main") {
             MainWindowView()
-                .environment(model)
+                .environment(store).environment(browser)
         }
         .defaultSize(width: 1000, height: 640)
-        .commands { CotsCommands(model: model) }
+        .commands { CotsCommands(store: store, browser: browser) }
 
         Settings {
             SettingsView()
-                .environment(model)
+                .environment(store).environment(browser)
         }
     }
 
