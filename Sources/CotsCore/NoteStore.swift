@@ -44,6 +44,7 @@ public enum CotsConfig {
 public final class NoteStore: @unchecked Sendable {
     public let root: URL
     private let fm = FileManager.default
+    private let cache = NoteCache()
 
     public init(root: URL = CotsConfig.resolveRoot()) {
         self.root = root
@@ -81,20 +82,25 @@ public final class NoteStore: @unchecked Sendable {
 
     // MARK: Folders
 
-    public func folders() throws -> [Folder] {
-        guard fm.fileExists(atPath: root.path) else { return [] }
+    public func folders() throws -> [Folder] { try scan().folders }
+
+    /// Folders with their counts and every note, newest first, from one pass over the disk.
+    public func scan() throws -> (folders: [Folder], notes: [Note]) {
+        guard fm.fileExists(atPath: root.path) else { return ([], []) }
         let urls = try fm.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey],
                                               options: [.skipsHiddenFiles])
-        return try urls
-            .filter { (try? $0.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true }
-            .filter { !$0.lastPathComponent.hasPrefix("_") }
-            .map { url in
-                let notes = try noteURLs(in: url)
-                let unread = notes.filter { (try? loadNote(at: $0).meta.resolvedStatus) == .unread }.count
-                return Folder(name: url.lastPathComponent, url: url, config: folderConfig(url.lastPathComponent),
-                              noteCount: notes.count, unreadCount: unread)
-            }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        var folders: [Folder] = []
+        var notes: [Note] = []
+        for url in urls where !url.lastPathComponent.hasPrefix("_")
+            && (try? url.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+            let inFolder = try loadNotes(in: url)
+            folders.append(Folder(name: url.lastPathComponent, url: url, config: folderConfig(url.lastPathComponent),
+                                  noteCount: inFolder.count,
+                                  unreadCount: inFolder.count { $0.meta.resolvedStatus == .unread }))
+            notes += inFolder
+        }
+        folders.sort { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        return (folders, Self.sorted(notes))
     }
 
     public func folderConfig(_ name: String) -> FolderConfig {
@@ -128,22 +134,39 @@ public final class NoteStore: @unchecked Sendable {
     // MARK: Reading
 
     public func notes(in folder: String? = nil, includeArchived: Bool = true) throws -> [Note] {
-        let folderNames = try folder.map { [$0] } ?? folders().map(\.name)
-        var result: [Note] = []
-        for name in folderNames {
-            let url = root.appendingPathComponent(name, isDirectory: true)
-            guard fm.fileExists(atPath: url.path) else { throw CotsError.folderNotFound(name) }
-            for noteURL in try noteURLs(in: url) {
-                if let note = try? loadNote(at: noteURL),
-                   includeArchived || note.meta.resolvedStatus != .archived {
-                    result.append(note)
-                }
-            }
+        var result: [Note]
+        if let folder {
+            let url = root.appendingPathComponent(folder, isDirectory: true)
+            guard fm.fileExists(atPath: url.path) else { throw CotsError.folderNotFound(folder) }
+            result = Self.sorted(try loadNotes(in: url))
+        } else {
+            result = try scan().notes
         }
-        return result.sorted { a, b in
+        if !includeArchived { result.removeAll { $0.meta.resolvedStatus == .archived } }
+        return result
+    }
+
+    /// Pinned first, then newest first.
+    public static func sorted(_ notes: [Note]) -> [Note] {
+        notes.sorted { a, b in
             if a.meta.isPinned != b.meta.isPinned { return a.meta.isPinned }
             return Note.isOlder(b, a)
         }
+    }
+
+    /// Every note in a directory, parsing only files that changed since the last call.
+    /// Files that fail to read are skipped; broken frontmatter still loads (see `parseError`).
+    func loadNotes(in directory: URL, skipUnderscored: Bool = true) throws -> [Note] {
+        let urls = try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+            .filter { $0.pathExtension == "md" && !(skipUnderscored && $0.lastPathComponent.hasPrefix("_")) }
+        cache.retain(only: Set(urls.map(\.path)), under: directory.path + "/")
+        // Files are independent, so a cold load parses them on every core.
+        var loaded = [Note?](repeating: nil, count: urls.count)
+        loaded.withUnsafeMutableBufferPointer { buffer in
+            nonisolated(unsafe) let slots = buffer
+            DispatchQueue.concurrentPerform(iterations: urls.count) { i in slots[i] = try? loadNote(at: urls[i]) }
+        }
+        return loaded.compactMap { $0 }
     }
 
     /// Accepts `folder/name`, `folder/name.md`, `folder/latest`, or a bare `name` searched across folders.
@@ -168,10 +191,12 @@ public final class NoteStore: @unchecked Sendable {
     }
 
     public func loadNote(at url: URL) throws -> Note {
+        let stamp = NoteCache.Stamp(path: url.path)
+        if let stamp, let cached = cache.note(at: url.path, stamp: stamp) { return cached }
         let text = try String(contentsOf: url, encoding: .utf8)
         let (yaml, body) = Frontmatter.split(text)
         let folder = url.deletingLastPathComponent().lastPathComponent
-        let modified = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? Date()
+        let modified = stamp?.modified ?? Date()
         var meta = NoteMeta()
         var parseError: String?
         do {
@@ -179,22 +204,15 @@ public final class NoteStore: @unchecked Sendable {
         } catch {
             parseError = String(describing: error)
         }
-        return Note(id: "\(folder)/\(url.deletingPathExtension().lastPathComponent)", folder: folder, url: url,
-                    meta: meta, body: body, modified: modified, parseError: parseError)
+        let note = Note(id: "\(folder)/\(url.deletingPathExtension().lastPathComponent)", folder: folder, url: url,
+                        meta: meta, body: body, modified: modified, parseError: parseError)
+        if let stamp { cache.store(note, at: url.path, stamp: stamp) }
+        return note
     }
 
     public func search(_ query: String, in folder: String? = nil) throws -> [Note] {
-        let q = query.lowercased()
-        return try notes(in: folder).filter { note in
-            [note.title, note.meta.summary ?? "", note.body, (note.meta.tags ?? []).joined(separator: " ")]
-                .contains { $0.lowercased().contains(q) }
-        }
-    }
-
-    private func noteURLs(in folder: URL) throws -> [URL] {
-        try fm.contentsOfDirectory(at: folder, includingPropertiesForKeys: [.contentModificationDateKey],
-                                   options: [.skipsHiddenFiles])
-            .filter { $0.pathExtension == "md" && !$0.lastPathComponent.hasPrefix("_") }
+        let matcher = TextMatcher(query)
+        return try notes(in: folder).filter { $0.matches(matcher) }
     }
 
     // MARK: Writing

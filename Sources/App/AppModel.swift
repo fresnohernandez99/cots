@@ -25,6 +25,8 @@ final class AppModel {
     var lastError: String?
 
     private var watcher: FileWatcher?
+    private var reloading = false
+    private var reloadAgain = false
 
     init() {
         store = NoteStore()
@@ -67,20 +69,43 @@ final class AppModel {
         notes.filter { $0.folder == folder && $0.meta.resolvedStatus == .unread }.count
     }
 
+    /// Reads the disk off the main thread, so thousands of notes never freeze the UI.
+    /// File events arriving meanwhile coalesce into a single extra pass.
     func reload() {
-        do {
+        guard !reloading else { reloadAgain = true; return }
+        reloading = true
+        let store = store
+        Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                Result { (try store.scan(), Sessions.all(in: store)) }
+            }.value
+            // The root may have changed while reading; that load is stale.
+            if store === self.store { apply(result) }
+            reloading = false
+            if reloadAgain {
+                reloadAgain = false
+                reload()
+            }
+        }
+    }
+
+    /// Blocking load, for snapshot runs that render right after creating the model.
+    func reloadSynchronously() {
+        apply(Result { (try store.scan(), Sessions.all(in: store)) })
+    }
+
+    private func apply(_ result: Result<((folders: [Folder], notes: [Note]), [Note]), Error>) {
+        switch result {
+        case .success(let (scan, newSessions)):
             // Only publish real changes: reassigning identical arrays makes the
             // lists re-diff (and jump) on every file event, including our own writes.
-            let newFolders = try store.folders()
-            let newNotes = try store.notes()
-            if newFolders != folders { folders = newFolders }
-            if newNotes != notes { notes = newNotes }
-            let newSessions = Sessions.all(in: store)
+            if scan.folders != folders { folders = scan.folders }
+            if scan.notes != notes { notes = scan.notes }
             if newSessions != sessionNotes { sessionNotes = newSessions }
             notifyPendingSessions()
             if let selected = selectedFolder, !folders.contains(where: { $0.name == selected }) { selectedFolder = nil }
             if let topic = selectedTopic, !notes.contains(where: { $0.meta.topic == topic }) { selectedTopic = nil }
-        } catch {
+        case .failure(let error):
             lastError = error.localizedDescription
         }
     }
@@ -106,13 +131,25 @@ final class AppModel {
 
     // MARK: Mutations
 
-    private func perform(_ work: () throws -> Void) {
+    /// Runs a write and shows its result right away; the background reload that follows
+    /// catches everything else (counts, other files the write touched).
+    private func perform(_ work: () throws -> Note?) {
         do {
-            try work()
+            if let note = try work() { upsert(note) }
         } catch {
             lastError = error.localizedDescription
         }
         reload()
+    }
+
+    private func upsert(_ note: Note) {
+        if note.folder == Sessions.folder {
+            if let i = sessionNotes.firstIndex(where: { $0.id == note.id }) { sessionNotes[i] = note }
+            return
+        }
+        var updated = notes.filter { $0.id != note.id }
+        updated.append(note)
+        notes = NoteStore.sorted(updated)
     }
 
     func markRead(_ note: Note) {
@@ -141,8 +178,10 @@ final class AppModel {
         meta.status = NoteStatus.read.rawValue
         var created: Note?
         perform {
-            created = try store.create(folder: NoteStore.defaultFolder, frontmatter: Frontmatter.node(from: meta), body: note.body)
-            try Sessions.setResume(note.id, .dismissed, in: store)
+            let kept = try store.create(folder: NoteStore.defaultFolder, frontmatter: Frontmatter.node(from: meta), body: note.body)
+            created = kept
+            upsert(kept)
+            return try Sessions.setResume(note.id, .dismissed, in: store)
         }
         return created
     }
@@ -160,7 +199,13 @@ final class AppModel {
 
     func togglePin(_ note: Note) { perform { try store.setPinned(note.id, !note.meta.isPinned) } }
     func saveBody(_ note: Note, _ body: String) { perform { try store.updateBody(note.id, body: body) } }
-    func trash(_ note: Note) { perform { try store.trash(note.id) } }
+    func trash(_ note: Note) {
+        perform {
+            try store.trash(note.id)
+            notes.removeAll { $0.id == note.id }
+            return nil
+        }
+    }
 
     func toggleTask(_ note: Note, line: Int) {
         var lines = note.body.components(separatedBy: "\n")
@@ -184,12 +229,18 @@ final class AppModel {
         meta.display = Display(style: style.rawValue, color: color)
         if style == .plan { meta.review = Review(status: ReviewStatus.pending.rawValue) }
         var created: Note?
-        perform { created = try store.create(folder: folder, frontmatter: Frontmatter.node(from: meta), body: body) }
+        perform {
+            created = try store.create(folder: folder, frontmatter: Frontmatter.node(from: meta), body: body)
+            return created
+        }
         return created
     }
 
     func createFolder(_ name: String) {
-        perform { try store.createFolder(name) }
+        perform {
+            try store.createFolder(name)
+            return nil
+        }
     }
 }
 

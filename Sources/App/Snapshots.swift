@@ -11,6 +11,7 @@ enum Snapshots {
         NSApp.setActivationPolicy(.prohibited)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let model = AppModel()
+        model.reloadSynchronously()
         let plan = model.notes.first { $0.style == .plan && $0.reviewStatus == .pending }
         let report = model.notes.first { $0.style == .report && $0.meta.actions != nil } ?? model.notes.first { $0.style == .report }
 

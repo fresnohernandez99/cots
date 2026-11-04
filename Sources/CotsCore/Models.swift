@@ -10,14 +10,37 @@ public struct Note: Identifiable, Equatable, Sendable {
     public var modified: Date
     /// Set when the frontmatter couldn't be decoded; the note still shows, untyped.
     public var parseError: String?
+    /// `created`, else the modification date. Parsed once here: sorting compares it
+    /// thousands of times, and parsing a timestamp is slow.
+    public let date: Date
+
+    init(id: String, folder: String, url: URL, meta: NoteMeta, body: String, modified: Date, parseError: String?) {
+        self.id = id
+        self.folder = folder
+        self.url = url
+        self.meta = meta
+        self.body = body
+        self.modified = modified
+        self.parseError = parseError
+        date = meta.createdDate ?? modified
+    }
 
     public var title: String {
         if let t = meta.title, !t.isEmpty { return t }
         return url.deletingPathExtension().lastPathComponent
     }
 
-    public var date: Date { meta.createdDate ?? modified }
     public var style: DisplayStyle { meta.display?.resolvedStyle ?? .document }
+
+    /// Case-insensitive match on title, summary, tags and body.
+    public func matches(_ query: String) -> Bool {
+        matches(TextMatcher(query))
+    }
+
+    public func matches(_ matcher: TextMatcher) -> Bool {
+        matcher.matches(title) || matcher.matches(meta.summary ?? "")
+            || (meta.tags ?? []).contains(where: matcher.matches) || matcher.matches(body)
+    }
 
     /// Creation date, then modification date as a tie-break (several notes can share a second).
     public static func isOlder(_ a: Note, _ b: Note) -> Bool {
@@ -71,4 +94,23 @@ public struct Folder: Identifiable, Equatable, Sendable {
 
     public var id: String { name }
     public var title: String { config.title ?? name }
+}
+
+/// Case-insensitive substring search. ASCII queries (the usual case) go to `strcasestr`,
+/// many times faster than lowercasing every note or asking Foundation; non-ASCII bytes
+/// in the text are compared as is, which is right for an ASCII query.
+public struct TextMatcher: Sendable {
+    private let query: String
+    private let ascii: Bool
+
+    public init(_ query: String) {
+        ascii = query.utf8.allSatisfy { $0 < 128 }
+        self.query = ascii ? query : query.lowercased()
+    }
+
+    public func matches(_ text: String) -> Bool {
+        guard !query.isEmpty else { return true }
+        guard ascii else { return text.lowercased().contains(query) }
+        return text.withCString { hay in query.withCString { strcasestr(hay, $0) != nil } }
+    }
 }

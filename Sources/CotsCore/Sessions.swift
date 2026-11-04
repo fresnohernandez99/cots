@@ -17,10 +17,8 @@ public enum Sessions {
 
     public static func all(in store: NoteStore) -> [Note] {
         let dir = store.root.appendingPathComponent(folder, isDirectory: true)
-        let urls = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
-        return urls.filter { $0.pathExtension == "md" }
-            .compactMap { try? store.loadNote(at: $0) }
-            .sorted { Note.isOlder($1, $0) }
+        let notes = (try? store.loadNotes(in: dir, skipUnderscored: false)) ?? []
+        return notes.sorted { Note.isOlder($1, $0) }
     }
 
     /// Upserts the session's note with its latest reply and reopens it.
@@ -87,7 +85,8 @@ public enum Sessions {
         try store.updateFrontmatter(id, touch: false) { Frontmatter.set(Node(Timestamp.now()), at: ["resume", "notified"], in: &$0) }
     }
 
-    public static func setResume(_ id: String, _ status: ResumeStatus, in store: NoteStore) throws {
+    @discardableResult
+    public static func setResume(_ id: String, _ status: ResumeStatus, in store: NoteStore) throws -> Note {
         try store.updateFrontmatter(id, touch: false) { Frontmatter.set(Node(status.rawValue), at: ["resume", "status"], in: &$0) }
     }
 
