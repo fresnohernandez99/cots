@@ -178,7 +178,11 @@ final class NotesStore {
     func setColor(_ note: Note, _ color: String?) { perform { try disk.setColor(note.id, color) } }
 
     func togglePin(_ note: Note) { perform { try disk.setPinned(note.id, !note.meta.isPinned) } }
-    func saveBody(_ note: Note, _ body: String) { perform { try disk.updateBody(note.id, body: body) } }
+    /// `base` is the body the edit started from; if an agent changed the note meanwhile the
+    /// save fails with a message instead of erasing what the agent wrote.
+    func saveBody(_ note: Note, _ body: String, base: String) {
+        perform { try disk.updateBody(note.id, body: body, expected: base) }
+    }
 
     func trash(_ note: Note) {
         perform {
@@ -188,16 +192,9 @@ final class NotesStore {
         }
     }
 
+    /// Edits only that line of the file as it is now, so text an agent added meanwhile stays.
     func toggleTask(_ note: Note, line: Int) {
-        var lines = note.body.components(separatedBy: "\n")
-        guard lines.indices.contains(line) else { return }
-        let l = lines[line]
-        if let r = l.range(of: "[ ]") {
-            lines[line] = l.replacingCharacters(in: r, with: "[x]")
-        } else if let r = l.range(of: "[x]") ?? l.range(of: "[X]") {
-            lines[line] = l.replacingCharacters(in: r, with: "[ ]")
-        }
-        saveBody(note, lines.joined(separator: "\n"))
+        perform { try disk.toggleTask(note.id, line: line + 1) }
     }
 
     @discardableResult

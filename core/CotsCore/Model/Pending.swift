@@ -1,4 +1,5 @@
 import Foundation
+import Yams
 
 extension Note {
     /// Unchecked Markdown tasks (`- [ ] …`, also `*` and `+` bullets), in order, without
@@ -10,9 +11,14 @@ extension Note {
     /// The body with the open tasks that `shouldCheck` accepts ticked (`- [x]`), and
     /// those tasks. Everything else, spacing included, is left as it was.
     public func checkingTasks(where shouldCheck: (String) -> Bool) -> (body: String, checked: [String]) {
+        Self.checkingTasks(in: body) { _, task in shouldCheck(task) }
+    }
+
+    /// Same, deciding by the task's 1-based line in the body as well as its text.
+    public static func checkingTasks(in body: String, where shouldCheck: (Int, String) -> Bool) -> (body: String, checked: [String]) {
         var lines = body.components(separatedBy: "\n")
         var checked: [String] = []
-        for (index, task, box) in Self.taskLines(in: body) where shouldCheck(task) {
+        for (index, task, box) in taskLines(in: body) where shouldCheck(index + 1, task) {
             let line = lines[index]
             let i = line.index(line.startIndex, offsetBy: box)
             lines[index] = line.replacingCharacters(in: i..<line.index(after: i), with: "x")
@@ -73,5 +79,28 @@ public struct PendingReport {
             for task in tasks { out += "\n  - [ ] \(task)" }
         }
         return out
+    }
+}
+
+extension NoteStore {
+    /// Flips the checkbox of the task on `line` (1-based, in the body) between `[ ]` and
+    /// `[x]`, in the file as it is now. A line that isn't a task is left alone.
+    @discardableResult
+    public func toggleTask(_ id: String, line: Int) throws -> Note {
+        try mutate(id) { node, body in
+            var lines = body.components(separatedBy: "\n")
+            guard lines.indices.contains(line - 1) else { return }
+            let text = lines[line - 1]
+            let indent = text.prefix { $0 == " " || $0 == "\t" }.count
+            let rest = text.dropFirst(indent)
+            guard let bullet = rest.first, "-*+".contains(bullet) else { return }
+            let box = rest.dropFirst()
+            let mark: String
+            if box.hasPrefix(" [ ]") { mark = "x" } else if box.hasPrefix(" [x]") || box.hasPrefix(" [X]") { mark = " " } else { return }
+            let i = text.index(text.startIndex, offsetBy: indent + 3)
+            lines[line - 1] = text.replacingCharacters(in: i..<text.index(after: i), with: mark)
+            body = lines.joined(separator: "\n")
+            Frontmatter.set(Node(Timestamp.now()), at: ["updated"], in: &node)
+        }
     }
 }

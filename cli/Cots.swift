@@ -5,16 +5,17 @@ import Yams
 
 @main
 struct Cots: ParsableCommand {
-    /// From the enclosing coTs.app's Info.plist (the CLI lives in Contents/Resources).
-    static let version: String = {
-        let exe = URL(fileURLWithPath: CommandLine.arguments[0]).resolvingSymlinksInPath()
-        let plist = exe.deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("Info.plist")
-        return (NSDictionary(contentsOf: plist)?["CFBundleShortVersionString"] as? String) ?? "dev"
-    }()
+    static let version = cotsVersion
+
+    /// This executable, resolved: `CommandLine.arguments[0]` is just `cots` when run from the PATH.
+    static var executable: URL {
+        Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0])
+    }
 
     static let configuration = CommandConfiguration(
         commandName: "cots",
-        abstract: "Notas en Markdown que humanos e IAs comparten. La app de la barra de menú lee la misma carpeta.",
+        abstract: "Notas en Markdown que humanos e IAs comparten. La app de coTs (macOS o Windows) lee la misma carpeta.",
+        version: cotsVersion,
         subcommands: [Add.self, Plan.self, Wait.self, Review.self, Hook.self, MCP.self, Append.self, List.self, Pending.self, Check.self, Read.self, Search.self, SetCmd.self,
                       Folders.self, FolderCmd.self, Mkdir.self, Schema_.self, Root.self, Setup.self, Trash.self, Export.self]
     )

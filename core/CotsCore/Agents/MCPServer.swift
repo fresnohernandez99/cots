@@ -90,7 +90,7 @@ public final class MCPServer {
                 if a["unread_only"] as? Bool == true { notes = notes.filter { $0.meta.resolvedStatus == .unread } }
             }
             if let topic = a["topic"] as? String { notes = notes.filter { $0.meta.topic?.lowercased() == topic.lowercased() } }
-            let lines = notes.prefix(a["limit"] as? Int ?? 20).map { n in
+            let lines = notes.prefix(min(max(a["limit"] as? Int ?? 20, 0), 500)).map { n in
                 let date = DateFormatter.logHeading.string(from: n.date)
                 var line = "- \(n.id) · \(date)\(n.meta.topic.map { " · [\($0)]" } ?? "") · \(n.title)"
                 if let review = n.reviewStatusForTools { line += " · plan: \(review)" }
@@ -139,7 +139,7 @@ public final class MCPServer {
             """
 
         case "get_plan_review":
-            let id = try string(a, "id")
+            let id = try store.note(id: try string(a, "id")).id
             // Bounded so a client's request timeout never fires first.
             let deadline = Date().addingTimeInterval(min(max(a["wait_seconds"] as? Double ?? 0, 0), 50))
             while true {

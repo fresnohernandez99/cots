@@ -136,13 +136,41 @@ fn open_url(app: AppHandle, url: String) -> Result<(), String> {
     app.opener().open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
+/// Same rules as `ActionPolicy` in the Swift core: a note can't make one click run a
+/// program, and network paths (which leak the Windows login hash) are never touched.
+const RUNNABLE: &[&str] = &[
+    "app", "command", "tool", "terminal", "workflow", "action", "pkg", "mpkg", "scpt", "applescript", "jar",
+    "exe", "com", "bat", "cmd", "ps1", "psm1", "vbs", "vbe", "js", "jse", "wsf", "wsh", "hta", "lnk", "url",
+    "scr", "msi", "msp", "cpl", "reg", "inf", "pif", "appref-ms", "sh", "zsh", "bash", "py", "rb", "pl",
+];
+
+fn is_network_path(path: &str) -> bool {
+    path.starts_with("\\\\") || path.starts_with("//")
+}
+
+fn refusal_to_open(path: &str) -> Option<String> {
+    if is_network_path(path) {
+        return Some(format!("No abro rutas de red: {path}"));
+    }
+    let ext = std::path::Path::new(path).extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase();
+    RUNNABLE
+        .contains(&ext.as_str())
+        .then(|| format!("Por seguridad, coTs no abre programas ni scripts desde una nota: {path}"))
+}
+
 #[tauri::command]
 fn open_path(app: AppHandle, path: String) -> Result<(), String> {
+    if let Some(refusal) = refusal_to_open(&path) {
+        return Err(refusal);
+    }
     app.opener().open_path(path, None::<&str>).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 fn reveal(app: AppHandle, path: String) -> Result<(), String> {
+    if is_network_path(&path) {
+        return Err(format!("No abro rutas de red: {path}"));
+    }
     app.opener().reveal_item_in_dir(path).map_err(|e| e.to_string())
 }
 
@@ -250,6 +278,19 @@ fn on_menu(app: &AppHandle, id: &str) {
         }
         "quit" => app.exit(0),
         _ => {}
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refuses_programs_and_network_paths() {
+        assert!(refusal_to_open("C:\\Users\\ana\\run.BAT").is_some());
+        assert!(refusal_to_open("\\\\server\\share\\doc.pdf").is_some());
+        assert!(refusal_to_open("/Users/ana/x.command").is_some());
+        assert!(refusal_to_open("C:\\Users\\ana\\informe.pdf").is_none());
     }
 }
 

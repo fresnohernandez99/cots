@@ -14,8 +14,23 @@ struct Wait: ParsableCommand {
     func run() throws {
         let s = try store.store()
         let start = Date()
+        // Resolved once: `plans/latest` must not drift to a newer plan while waiting, and a
+        // bare id would otherwise scan every note each second.
+        let fixedID = try s.note(id: id).id
+        var missingSince: Date?
         while true {
-            let note = try s.note(id: id)
+            let note: Note
+            do {
+                note = try s.note(id: fixedID)
+                missingSince = nil
+            } catch CotsError.noteNotFound(let missing) {
+                // A sync client briefly moves files while it renames or downloads them.
+                let since = missingSince ?? Date()
+                missingSince = since
+                guard Date().timeIntervalSince(since) < 30 else { throw CotsError.noteNotFound(missing) }
+                Thread.sleep(forTimeInterval: 1)
+                continue
+            }
             let review = note.meta.review?.resolvedStatus ?? .pending
             if review != .pending {
                 print("review: \(review.rawValue)")

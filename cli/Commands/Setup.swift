@@ -14,7 +14,7 @@ struct Setup: ParsableCommand {
     @Flag var json = false
 
     func run() throws {
-        let env = IntegrationEnvironment.cli(executable: URL(fileURLWithPath: CommandLine.arguments[0]))
+        let env = IntegrationEnvironment.cli(executable: Cots.executable)
         let integrations = Integrations.all(env)
         var errors: [String] = []
         if remove {

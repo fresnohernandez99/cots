@@ -5,6 +5,7 @@ public final class NoteStore: @unchecked Sendable {
     public let root: URL
     private let fm = FileManager.default
     private let cache = NoteCache()
+    private var lock: WriteLock { WriteLock(root: root) }
 
     public init(root: URL = CotsConfig.resolveRoot()) {
         self.root = root
@@ -64,6 +65,7 @@ public final class NoteStore: @unchecked Sendable {
     }
 
     public func folderConfig(_ name: String) -> FolderConfig {
+        guard Self.isSafeComponent(name) else { return FolderConfig() }
         let url = root.appendingPathComponent(name).appendingPathComponent(FolderConfig.fileName)
         guard let yaml = try? String(contentsOf: url, encoding: .utf8),
               let config = try? YAMLDecoder().decode(FolderConfig.self, from: yaml) else { return FolderConfig() }
@@ -93,10 +95,23 @@ public final class NoteStore: @unchecked Sendable {
 
     // MARK: Reading
 
+    /// One path component inside the root. Ids and folder names come from agents (CLI,
+    /// MCP), so `..`, separators and hidden names are refused: nothing outside the notes
+    /// folder (a skill, a CLAUDE.md…) can be read or rewritten through an id.
+    static func isSafeComponent(_ name: String) -> Bool {
+        !name.isEmpty && !name.hasPrefix(".") && !name.contains("/") && !name.contains("\\")
+            && !name.contains("\0") && !name.contains(":")
+    }
+
+    private func folderURL(_ folder: String) throws -> URL {
+        guard Self.isSafeComponent(folder) else { throw CotsError.folderNotFound(folder) }
+        return root.appendingPathComponent(folder, isDirectory: true)
+    }
+
     public func notes(in folder: String? = nil, includeArchived: Bool = true) throws -> [Note] {
         var result: [Note]
         if let folder {
-            let url = root.appendingPathComponent(folder, isDirectory: true)
+            let url = try folderURL(folder)
             guard fm.fileExists(atPath: url.path) else { throw CotsError.folderNotFound(folder) }
             result = Self.sorted(try loadNotes(in: url))
         } else {
@@ -140,7 +155,8 @@ public final class NoteStore: @unchecked Sendable {
                 }
                 return latest
             }
-            let url = root.appendingPathComponent(parts[0]).appendingPathComponent(parts[1] + ".md")
+            guard Self.isSafeComponent(parts[1]) else { throw CotsError.noteNotFound(rawID) }
+            let url = try folderURL(parts[0]).appendingPathComponent(parts[1] + ".md")
             guard fm.fileExists(atPath: url.path) else { throw CotsError.noteNotFound(rawID) }
             return try loadNote(at: url)
         }
@@ -153,7 +169,7 @@ public final class NoteStore: @unchecked Sendable {
     public func loadNote(at url: URL) throws -> Note {
         let stamp = NoteCache.Stamp(path: url.path)
         if let stamp, let cached = cache.note(at: url.path, stamp: stamp) { return cached }
-        let text = try String(contentsOf: url, encoding: .utf8)
+        let text = try Frontmatter.read(url)
         let (yaml, body) = Frontmatter.split(text)
         let folder = url.deletingLastPathComponent().lastPathComponent
         let modified = stamp?.modified ?? Date()
@@ -197,8 +213,33 @@ public final class NoteStore: @unchecked Sendable {
             throw CotsError.invalidFrontmatter("falta 'title'")
         }
 
-        let url = uniqueURL(in: folderURL, title: title, date: meta.createdDate ?? Date())
-        try Frontmatter.join(node: node, body: body).write(to: url, atomically: true, encoding: .utf8)
+        let text = try Frontmatter.join(node: node, body: body)
+        // Choosing the name and writing the file happen under one lock, so a note created
+        // in the same minute by another process gets `-2` instead of replacing this one.
+        let url = try lock.run {
+            let url = uniqueURL(in: folderURL, title: title, date: meta.createdDate ?? Date())
+            try text.write(to: url, atomically: true, encoding: .utf8)
+            return url
+        }
+        Ownership.matchHome(url)
+        return try loadNote(at: url)
+    }
+
+    /// The one way to change an existing note: resolves `id` once (so `latest` can't move
+    /// mid-edit), then reads the file fresh, edits and writes it under the write lock, so
+    /// concurrent edits from the app, agents and hooks all land.
+    @discardableResult
+    public func mutate(_ id: String, _ edit: (inout Node, inout String) throws -> Void) throws -> Note {
+        let url = try note(id: id).url
+        try lock.run {
+            let text = try Frontmatter.read(url)
+            let (yaml, original) = Frontmatter.split(text)
+            var node = try Frontmatter.parse(yaml)
+            var body = original
+            try edit(&node, &body)
+            _ = try Frontmatter.decodeMeta(node)
+            try Frontmatter.join(node: node, body: body).write(to: url, atomically: true, encoding: .utf8)
+        }
         Ownership.matchHome(url)
         return try loadNote(at: url)
     }
@@ -206,27 +247,22 @@ public final class NoteStore: @unchecked Sendable {
     /// Edits a note's frontmatter in place, keeping keys this app doesn't model.
     @discardableResult
     public func updateFrontmatter(_ id: String, touch: Bool = true, _ edit: (inout Node) throws -> Void) throws -> Note {
-        let note = try note(id: id)
-        let text = try String(contentsOf: note.url, encoding: .utf8)
-        let (yaml, body) = Frontmatter.split(text)
-        var node = try Frontmatter.parse(yaml)
-        try edit(&node)
-        if touch { Frontmatter.set(Node(Timestamp.now()), at: ["updated"], in: &node) }
-        _ = try Frontmatter.decodeMeta(node)
-        try Frontmatter.join(node: node, body: body).write(to: note.url, atomically: true, encoding: .utf8)
-        Ownership.matchHome(note.url)
-        return try loadNote(at: note.url)
+        try mutate(id) { node, _ in
+            try edit(&node)
+            if touch { Frontmatter.set(Node(Timestamp.now()), at: ["updated"], in: &node) }
+        }
     }
 
+    /// Replaces the body. `expected` is the body the caller edited from (the app's editor):
+    /// if the file changed meanwhile (an agent appended), nothing is written, so the
+    /// agent's text isn't silently lost.
     @discardableResult
-    public func updateBody(_ id: String, body: String) throws -> Note {
-        let note = try note(id: id)
-        let text = try String(contentsOf: note.url, encoding: .utf8)
-        var node = try Frontmatter.parse(Frontmatter.split(text).yaml)
-        Frontmatter.set(Node(Timestamp.now()), at: ["updated"], in: &node)
-        try Frontmatter.join(node: node, body: body).write(to: note.url, atomically: true, encoding: .utf8)
-        Ownership.matchHome(note.url)
-        return try loadNote(at: note.url)
+    public func updateBody(_ id: String, body: String, expected: String? = nil) throws -> Note {
+        try mutate(id) { node, current in
+            if let expected, current != expected { throw CotsError.changedOnDisk(id) }
+            Frontmatter.set(Node(Timestamp.now()), at: ["updated"], in: &node)
+            current = body
+        }
     }
 
     @discardableResult
@@ -258,20 +294,35 @@ public final class NoteStore: @unchecked Sendable {
     /// Appends a timestamped `## ` entry, the format the `log` style renders as a timeline.
     @discardableResult
     public func append(_ id: String, text: String, markUnread: Bool = true) throws -> Note {
-        let note = try note(id: id)
         let stamp = DateFormatter.logHeading.string(from: Date())
-        var body = note.body.trimmingCharacters(in: .newlines)
-        body += (body.isEmpty ? "" : "\n\n") + "## \(stamp)\n\n" + text.trimmingCharacters(in: .newlines) + "\n"
-        _ = try updateBody(id, body: body)
-        if markUnread { return try setStatus(id, .unread) }
-        return try self.note(id: id)
+        return try mutate(id) { node, body in
+            body = body.trimmingCharacters(in: .newlines)
+            body += (body.isEmpty ? "" : "\n\n") + "## \(stamp)\n\n" + text.trimmingCharacters(in: .newlines) + "\n"
+            Frontmatter.set(Node(Timestamp.now()), at: ["updated"], in: &node)
+            if markUnread { Frontmatter.set(Node(NoteStatus.unread.rawValue), at: ["status"], in: &node) }
+        }
+    }
+
+    /// Ticks open tasks in the file as it is now, not as some caller last saw it.
+    @discardableResult
+    public func checkTasks(_ id: String, where shouldCheck: (Int, String) -> Bool) throws -> (note: Note, checked: [String]) {
+        var checked: [String] = []
+        let note = try mutate(id) { node, body in
+            let result = Note.checkingTasks(in: body, where: shouldCheck)
+            guard !result.checked.isEmpty else { return }
+            body = result.body
+            checked = result.checked
+            Frontmatter.set(Node(Timestamp.now()), at: ["updated"], in: &node)
+        }
+        return (note, checked)
     }
 
     /// Writes a note at a fixed location (session notes), creating its folder.
     func write(node: Node, body: String, to url: URL) throws {
         let dir = url.deletingLastPathComponent()
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        try Frontmatter.join(node: node, body: body).write(to: url, atomically: true, encoding: .utf8)
+        let text = try Frontmatter.join(node: node, body: body)
+        try lock.run { try text.write(to: url, atomically: true, encoding: .utf8) }
         Ownership.matchHome(root, dir, url)
     }
 

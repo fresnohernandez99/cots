@@ -12,6 +12,8 @@ struct NoteDetailView: View {
 
     @State private var editing = false
     @State private var draft = ""
+    /// The body when editing started: saving is refused if the file changed since.
+    @State private var draftBase = ""
     @State private var reviewComment = ""
     @State private var showAIContext = false
     @State private var pendingRun: NoteAction?
@@ -194,7 +196,7 @@ struct NoteDetailView: View {
 
     private func decide(_ note: Note, _ status: ReviewStatus) {
         if editing {
-            store.saveBody(note, draft)
+            store.saveBody(note, draft, base: draftBase)
             editing = false
         }
         store.setReview(note, status, comment: reviewComment)
@@ -209,7 +211,7 @@ struct NoteDetailView: View {
             if editing {
                 Button("Cancelar") { editing = false }
                 Button("Guardar") {
-                    store.saveBody(note, draft)
+                    store.saveBody(note, draft, base: draftBase)
                     editing = false
                 }
                 .keyboardShortcut("s")
@@ -223,6 +225,7 @@ struct NoteDetailView: View {
                 }
                 Button {
                     draft = note.body
+                    draftBase = note.body
                     editing = true
                 } label: { Label("Editar", systemImage: "pencil") }
                     .help("Editar")
@@ -270,14 +273,21 @@ struct NoteDetailView: View {
         case .copy:
             Clipboard.copy(action.text ?? note.body)
         case .openURL:
-            if let s = action.url, let url = URL(string: s) { NSWorkspace.shared.open(url) }
+            guard let s = action.url, ActionPolicy.isWebURL(s), let url = URL(string: s) else {
+                store.lastError = String(localized: "Solo se abren enlaces web (http, https, mailto).")
+                return
+            }
+            NSWorkspace.shared.open(url)
         case .openFile:
-            if let p = action.path { NSWorkspace.shared.open(URL(fileURLWithPath: (p as NSString).expandingTildeInPath)) }
+            guard let p = action.path else { return }
+            if let refusal = ActionPolicy.refusalToOpen(p) { store.lastError = refusal; return }
+            NSWorkspace.shared.open(URL(fileURLWithPath: (p as NSString).expandingTildeInPath))
         case .reveal:
             if let p = action.path {
                 NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: (p as NSString).expandingTildeInPath)])
             }
         case .run:
+            if let refusal = ActionPolicy.refusalToRun(action.command ?? "") { store.lastError = refusal; return }
             pendingRun = action
         case nil:
             store.lastError = String(localized: "Acción desconocida: \(action.type)")

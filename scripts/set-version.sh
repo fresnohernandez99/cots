@@ -8,6 +8,8 @@ V="${1:?uso: scripts/set-version.sh x.y.z}"
 [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "La versión debe ser x.y.z"; exit 1; }
 
 echo "$V" > VERSION
+sed -i.bak -E "s/^let cotsVersion = \"[^\"]+\"/let cotsVersion = \"$V\"/" cli/Version.swift && rm -f cli/Version.swift.bak
+(cd apps/windows && npm version "$V" --no-git-tag-version --allow-same-version >/dev/null)
 sed -i.bak -E "s/^version = \"[^\"]+\"/version = \"$V\"/" apps/windows/src-tauri/Cargo.toml
 sed -i.bak -E "s/\"version\": \"[^\"]+\"/\"version\": \"$V\"/" apps/windows/src-tauri/tauri.conf.json apps/windows/package.json
 rm -f apps/windows/src-tauri/Cargo.toml.bak apps/windows/src-tauri/tauri.conf.json.bak apps/windows/package.json.bak

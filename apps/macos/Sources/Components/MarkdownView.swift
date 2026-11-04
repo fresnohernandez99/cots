@@ -1,3 +1,4 @@
+import CotsCore
 import SwiftUI
 
 /// A small block-level Markdown renderer. SwiftUI's `Text(markdown)` only handles
@@ -14,6 +15,10 @@ struct MarkdownView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .textSelection(.enabled)
+        // Links in a note can't open files or apps, only web pages and mail.
+        .environment(\.openURL, OpenURLAction { url in
+            ActionPolicy.isWebURL(url.absoluteString) ? .systemAction : .discarded
+        })
     }
 
     @ViewBuilder

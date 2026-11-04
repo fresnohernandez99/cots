@@ -4,6 +4,13 @@ import Yams
 /// Splits and joins `---` YAML frontmatter and edits it at the node level, so keys
 /// this app doesn't know about (added by a user or an agent) survive every write.
 public enum Frontmatter {
+    /// A note's text. A file that isn't valid UTF-8 (saved as Latin-1 by some editor)
+    /// still loads, with the bad bytes replaced, instead of vanishing from every list.
+    public static func read(_ url: URL) throws -> String {
+        let data = try Data(contentsOf: url)
+        return String(data: data, encoding: .utf8) ?? String(decoding: data, as: UTF8.self)
+    }
+
     public static func split(_ text: String) -> (yaml: String?, body: String) {
         let normalized = text.utf8.contains(13) ? text.replacingOccurrences(of: "\r\n", with: "\n") : text
         // Scans bytes up to the closing fence only: Character-level string walking is slow
@@ -38,7 +45,25 @@ public enum Frontmatter {
         guard let node = try compose(yaml: yaml), node.mapping != nil else {
             throw CotsError.invalidFrontmatter("el frontmatter debe ser un mapa YAML")
         }
+        // Aliases let a few lines expand into millions of nodes on every write ("billion
+        // laughs"). Parsing shares them, so counting with a cap stays cheap.
+        var budget = maxNodes
+        guard fits(node, budget: &budget) else {
+            throw CotsError.invalidFrontmatter("el frontmatter es demasiado grande (¿alias YAML anidados?)")
+        }
         return node
+    }
+
+    static let maxNodes = 20_000
+
+    private static func fits(_ node: Node, budget: inout Int) -> Bool {
+        budget -= 1
+        guard budget >= 0 else { return false }
+        switch node {
+        case .scalar, .alias: return true
+        case .sequence(let seq): return seq.allSatisfy { fits($0, budget: &budget) }
+        case .mapping(let map): return map.allSatisfy { fits($0.key, budget: &budget) && fits($0.value, budget: &budget) }
+        }
     }
 
     public static func decodeMeta(_ node: Node) throws -> NoteMeta {

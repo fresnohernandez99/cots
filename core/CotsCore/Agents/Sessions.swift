@@ -10,9 +10,8 @@ public enum Sessions {
     static let keepPerTopic = 10
 
     static func url(in store: NoteStore, topic: String, session: String) -> URL {
-        let safe = { (s: String) in s.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_") }
-        return store.root.appendingPathComponent(folder, isDirectory: true)
-            .appendingPathComponent("\(safe(topic))--\(safe(session)).md")
+        store.root.appendingPathComponent(folder, isDirectory: true)
+            .appendingPathComponent("\(FileName.safe(topic))--\(FileName.safe(session)).md")
     }
 
     public static func all(in store: NoteStore) -> [Note] {

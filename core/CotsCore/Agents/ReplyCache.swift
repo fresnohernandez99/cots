@@ -35,6 +35,27 @@ public struct ReplyCache: Sendable {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try JSONEncoder().encode(reply).write(to: file(session: reply.session, agent: reply.agent), options: .atomic)
         Ownership.matchHome(directory.deletingLastPathComponent(), directory, file(session: reply.session, agent: reply.agent))
+        prune()
+    }
+
+    /// One file per session would otherwise pile up forever: keep the newest `keep`,
+    /// and nothing older than `maxAge`.
+    static let keep = 200
+    static let maxAge: TimeInterval = 30 * 24 * 3600
+
+    func prune() {
+        let files = newestFirst()
+        let cutoff = Date().addingTimeInterval(-Self.maxAge)
+        for (index, (date, url)) in files.enumerated() where index >= Self.keep || date < cutoff {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
+    private func newestFirst() -> [(Date, URL)] {
+        let urls = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        return urls.filter { $0.pathExtension == "json" }
+            .map { (((try? $0.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast), $0) }
+            .sorted { $0.0 > $1.0 }
     }
 
     public func reply(session: String, agent: String) -> CachedReply? {
@@ -42,26 +63,20 @@ public struct ReplyCache: Sendable {
     }
 
     private func file(session: String, agent: String) -> URL {
-        directory.appendingPathComponent("\(agent)-\(session.replacingOccurrences(of: "/", with: "_")).json")
+        directory.appendingPathComponent("\(FileName.safe(agent))-\(FileName.safe(session)).json")
     }
 
     /// Most recent reply, preferring sessions running in `cwd` (the CLI doesn't
     /// know which session invoked it, but the working directory narrows it down).
     public func latest(cwd: String? = nil) -> CachedReply? {
-        let fm = FileManager.default
-        guard let urls = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey]) else {
-            return nil
+        // Newest first, decoding only until a match: the cache can hold hundreds of replies.
+        var newest: CachedReply?
+        for (_, url) in newestFirst() {
+            guard let data = try? Data(contentsOf: url), let reply = try? JSONDecoder().decode(CachedReply.self, from: data) else { continue }
+            if newest == nil { newest = reply }
+            if cwd == nil || reply.cwd == cwd { return reply }
         }
-        let replies = urls
-            .compactMap { url -> (Date, CachedReply)? in
-                guard let data = try? Data(contentsOf: url), let r = try? JSONDecoder().decode(CachedReply.self, from: data) else { return nil }
-                let date = (try? url.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate) ?? .distantPast
-                return (date, r)
-            }
-            .sorted { $0.0 > $1.0 }
-            .map(\.1)
-        if let cwd, let match = replies.first(where: { $0.cwd == cwd }) { return match }
-        return replies.first
+        return newest
     }
 
     /// Title from the first heading or line, without markdown, at most ~70 chars on a word boundary.

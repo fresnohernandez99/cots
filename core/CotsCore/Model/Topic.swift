@@ -13,8 +13,10 @@ public enum Topic {
         }
         // Without a repo, only folders inside the user's home count as projects
         // (not /tmp, /usr, ...).
-        let home = CotsConfig.home.standardizedFileURL.path
-        guard start.path.hasPrefix(home + "/") else { return nil }
+        // Components, not strings: on Windows paths use `\` and drive letters vary in case.
+        let home = CotsConfig.home.standardizedFileURL.pathComponents.map { $0.lowercased() }
+        let here = start.pathComponents.map { $0.lowercased() }
+        guard here.count > home.count, Array(here.prefix(home.count)) == home else { return nil }
         return start.lastPathComponent
     }
 }

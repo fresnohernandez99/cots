@@ -6,6 +6,7 @@ public enum CotsError: LocalizedError, Equatable {
     case noteNotFound(String)
     case folderNotFound(String)
     case invalidArgument(String)
+    case changedOnDisk(String)
 
     public var errorDescription: String? {
         switch self {
@@ -14,6 +15,7 @@ public enum CotsError: LocalizedError, Equatable {
         case .noteNotFound(let id): return "No existe la nota '\(id)'"
         case .folderNotFound(let n): return "No existe la carpeta '\(n)'"
         case .invalidArgument(let m): return m
+        case .changedOnDisk(let id): return "La nota '\(id)' cambió mientras la editabas (quizá un agente añadió algo); vuelve a abrirla"
         }
     }
 }
