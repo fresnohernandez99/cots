@@ -19,28 +19,35 @@ public struct CachedReply: Codable, Equatable, Sendable {
     }
 }
 
-public enum ReplyCache {
-    public static var directory: URL {
-        CotsConfig.home.appendingPathComponent("Library/Caches/\(CotsConfig.bundleID)/replies", isDirectory: true)
+public struct ReplyCache: Sendable {
+    public let directory: URL
+
+    public init(directory: URL) {
+        self.directory = directory
     }
 
-    public static func store(_ reply: CachedReply) throws {
+    /// Next to the app's other caches, under the user's home.
+    public static var standard: ReplyCache {
+        ReplyCache(directory: CotsConfig.home.appendingPathComponent("Library/Caches/\(CotsConfig.bundleID)/replies", isDirectory: true))
+    }
+
+    public func store(_ reply: CachedReply) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let name = reply.session.replacingOccurrences(of: "/", with: "_")
-        let file = directory.appendingPathComponent("\(reply.agent)-\(name).json")
-        try JSONEncoder().encode(reply).write(to: file, options: .atomic)
-        let caches = directory.deletingLastPathComponent()
-        Ownership.matchHome(caches, directory, file)
+        try JSONEncoder().encode(reply).write(to: file(session: reply.session, agent: reply.agent), options: .atomic)
+        Ownership.matchHome(directory.deletingLastPathComponent(), directory, file(session: reply.session, agent: reply.agent))
     }
 
-    public static func reply(session: String, agent: String) -> CachedReply? {
-        let url = directory.appendingPathComponent("\(agent)-\(session.replacingOccurrences(of: "/", with: "_")).json")
-        return (try? Data(contentsOf: url)).flatMap { try? JSONDecoder().decode(CachedReply.self, from: $0) }
+    public func reply(session: String, agent: String) -> CachedReply? {
+        (try? Data(contentsOf: file(session: session, agent: agent))).flatMap { try? JSONDecoder().decode(CachedReply.self, from: $0) }
+    }
+
+    private func file(session: String, agent: String) -> URL {
+        directory.appendingPathComponent("\(agent)-\(session.replacingOccurrences(of: "/", with: "_")).json")
     }
 
     /// Most recent reply, preferring sessions running in `cwd` (the CLI doesn't
     /// know which session invoked it, but the working directory narrows it down).
-    public static func latest(cwd: String? = nil) -> CachedReply? {
+    public func latest(cwd: String? = nil) -> CachedReply? {
         let fm = FileManager.default
         guard let urls = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.contentModificationDateKey]) else {
             return nil
@@ -65,27 +72,5 @@ public enum ReplyCache {
         guard clean.count > 70 else { return clean.isEmpty ? "Nota" : clean }
         let cut = clean.prefix(70)
         return (cut.lastIndex(of: " ").map { String(cut[..<$0]) } ?? String(cut)) + "…"
-    }
-}
-
-/// Parses "guarda en cots [carpeta]" style prompts. Deliberately strict: anything
-/// longer ("guarda un resumen con pendientes en cots") goes to the agent instead.
-public struct SaveCommand: Equatable, Sendable {
-    /// Folder named in the prompt, nil for the default one.
-    public var folder: String?
-
-    public static func parse(_ prompt: String) -> SaveCommand? {
-        let normalized = prompt
-            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: Locale(identifier: "es"))
-            .lowercased()
-            .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: ".!¡")))
-        let pattern = #"^(guarda|guardalo|guardala|guardar|save)( (esto|eso|this|it|el ultimo mensaje|la ultima respuesta|el ultimo informe|lo ultimo|last reply))? (en|in|to) cots( [a-z0-9_-]+)?$"#
-        guard let regex = try? NSRegularExpression(pattern: pattern),
-              let match = regex.firstMatch(in: normalized, range: NSRange(normalized.startIndex..., in: normalized)) else {
-            return nil
-        }
-        let range = match.range(at: 5)
-        guard range.location != NSNotFound, let r = Range(range, in: normalized) else { return SaveCommand(folder: nil) }
-        return SaveCommand(folder: normalized[r].trimmingCharacters(in: .whitespaces))
     }
 }

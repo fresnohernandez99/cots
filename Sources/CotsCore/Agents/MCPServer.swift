@@ -110,31 +110,25 @@ public final class MCPServer {
             return out
 
         case "save_note":
-            var node = Frontmatter.emptyMapping
-            Frontmatter.set(Node(try string(a, "title")), at: ["title"], in: &node)
-            for (key, path) in [("summary", ["summary"]), ("topic", ["topic"]), ("style", ["display", "style"]), ("color", ["display", "color"])] {
-                if let v = a[key] as? String, !v.isEmpty { Frontmatter.set(Node(v), at: path, in: &node) }
-            }
-            if let tags = a["tags"] as? [String], !tags.isEmpty {
-                Frontmatter.set(.sequence(Node.Sequence(tags.map { Node($0) })), at: ["tags"], in: &node)
-            }
-            Frontmatter.set(Node(clientName), at: ["source"], in: &node)
-            let note = try store.create(folder: a["folder"] as? String ?? NoteStore.defaultFolder, frontmatter: node,
-                                        body: try string(a, "body"))
-            return "Guardada en coTs: \(note.id)"
+            var draft = NoteDraft(folder: a["folder"] as? String ?? NoteStore.defaultFolder, body: try string(a, "body"))
+            draft.title = try string(a, "title")
+            draft.summary = nonEmpty(a["summary"])
+            draft.topic = nonEmpty(a["topic"])
+            draft.style = nonEmpty(a["style"])
+            draft.color = nonEmpty(a["color"])
+            if let tags = a["tags"] as? [String], !tags.isEmpty { draft.tags = tags }
+            draft.source = clientName
+            return "Guardada en coTs: \(try store.create(draft).id)"
 
         case "append_to_note":
             return "Añadido a \(try store.append(try string(a, "id"), text: try string(a, "text")).id)"
 
         case "create_plan":
-            var node = Frontmatter.emptyMapping
-            Frontmatter.set(Node(try string(a, "title")), at: ["title"], in: &node)
-            if let s = a["summary"] as? String { Frontmatter.set(Node(s), at: ["summary"], in: &node) }
-            if let t = a["topic"] as? String { Frontmatter.set(Node(t), at: ["topic"], in: &node) }
-            Frontmatter.set(Node(clientName), at: ["source"], in: &node)
-            Frontmatter.set(Node(ReviewStatus.pending.rawValue), at: ["review", "status"], in: &node)
-            Frontmatter.set(Node(DisplayStyle.plan.rawValue), at: ["display", "style"], in: &node)
-            let note = try store.create(folder: NoteStore.plansFolder, frontmatter: node, body: try string(a, "body"))
+            var draft = NoteDraft.plan(title: try string(a, "title"), body: try string(a, "body"))
+            draft.summary = a["summary"] as? String
+            draft.topic = a["topic"] as? String
+            draft.source = clientName
+            let note = try store.create(draft)
             return """
             Plan creado: \(note.id).
             Pide al usuario que lo revise en coTs (Aprobar / Pedir cambios / Rechazar) y que te avise. \
@@ -167,6 +161,10 @@ public final class MCPServer {
             throw CotsError.invalidArgument("falta el argumento '\(key)'")
         }
         return v
+    }
+
+    private func nonEmpty(_ value: Any?) -> String? {
+        (value as? String).flatMap { $0.isEmpty ? nil : $0 }
     }
 
     private func result(_ id: Any, _ result: [String: Any]) -> [String: Any] {
