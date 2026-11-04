@@ -3,7 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../.."
 
-VERSION="0.6.0"
+VERSION="$(cat VERSION)"
 swift build -c release
 BIN="$(swift build -c release --show-bin-path)"
 APP="build/coTs.app"

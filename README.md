@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Resources/AppIcon-1024.png" width="128" alt="coTs">
+  <img src="assets/AppIcon-1024.png" width="128" alt="coTs">
 </p>
 
 <h1 align="center">coTs</h1>
@@ -8,7 +8,7 @@
 
 <p align="center">
   <b>Code notes for you and your AIs.</b><br>
-  A native macOS menu bar app where Claude Code, Codex or Gemini save reports, logs and plans, and where you read, edit and approve them.
+  A menu bar app for macOS and a tray app for Windows where Claude Code, Codex or Gemini save reports, logs and plans, and where you read, edit and approve them.
 </p>
 
 <p align="center">
@@ -28,14 +28,33 @@
 - **"save in cots"** stores the AI's last reply verbatim in ~0.3 s and **without spending tokens**: in Claude Code a hook catches the phrase before it reaches the model.
 - **"let's make a plan in cots"**: the AI writes a plan, you review it in the app (you can edit it) and click **Approve**, **Request changes** or **Reject**. The AI, which was waiting without consuming tokens, continues on its own with your decision and your version of the plan.
 - **Never lose the thread**: every AI session keeps saving its last message to a hidden note for the project. If the session closes or the Mac shuts down, the next time a session starts in that project coTs notifies you, and the AI gets a one-line recap of where it stopped.
+- **"what's pending in cots?"** answers with the open tasks and plans awaiting review of the project you opened the agent in, without asking which one. Outside a project it lists them all.
 - **Topics and colors**: each note is tagged automatically with the project (git repo) the AI was working in, and each topic always gets the same color. You can also pick a color per note.
 - **Just Markdown files**: your notes are plain `.md` files in `~/coTs`. Open them with any editor, version them or sync them.
-- **Always at hand**: it lives in the menu bar, starts at login and shows how many notes are unread and how many plans await your review.
+- **Always at hand**: it lives in the menu bar (macOS) or the system tray (Windows), starts at login and shows how many notes are unread and how many plans await your review.
 - **English and Spanish.**
+
+## Apps
+
+| | macOS | Windows |
+|---|---|---|
+| App | Menu bar, SwiftUI (`apps/macos`) | System tray, Tauri (`apps/windows`) |
+| Notes, CLI, skill, hooks, MCP | Shared | Shared |
+| Download | `coTs-<version>-macos-<arch>.dmg` | `coTs-<version>-windows-x64-setup.exe` |
+
+Both read the same notes folder through the same `cots` CLI, so a notes folder synced between a Mac and a PC works on both. Downloads are on the [releases page](https://github.com/fresnohernandez99/cots/releases): release candidates are pre-releases named "coTs x.y.z RC n".
+
+<p align="center"><img src="docs/screenshots/windows.png" width="300" alt="coTs on Windows"></p>
 
 ## Install
 
-1. Open `coTs-<version>.dmg` and drag **coTs** to **Applications**.
+### Windows
+
+Run `coTs-<version>-windows-x64-setup.exe`. It installs for your user (no admin rights), adds `cots` to your PATH, and on first launch installs the skill, the Claude Code hooks and the Claude Desktop MCP server, like the Mac app. Click the tray icon to open your notes; right-click it for **New note**, **Open notes folder**, **Start at login** and **Settings**. Uninstalling from Windows Settings removes all of that too, never your notes. The installer isn't code-signed yet: if SmartScreen warns, choose **More info → Run anyway**.
+
+### macOS
+
+1. Open `coTs-<version>-macos-<arch>.dmg` and drag **coTs** to **Applications**.
 2. Open it. On first launch it sets up:
    - launch at login;
    - the `cots` CLI in `/usr/local/bin` (or `~/.local/bin`);
@@ -187,9 +206,12 @@ cots add code-notes --from-last-reply        # uses the last reply captured by t
 cots plan --title … < plan.md                 # creates a pending plan
 cots wait <id> [--timeout s]                  # blocks until you decide
 cots review <id> approved|changes|rejected [--comment …]
-cots list [folder] [--topic X] [--unread] [--json]
+cots list [folder] [--here | --topic X] [--unread] [--json]
+cots pending [--topic X | --all-projects]     # open tasks and plans to review, current project by default
+cots check <id> "part of a task" [--all]      # ticks tasks off
+cots setup [--status] [--remove]              # skill, hooks and MCP pointing at this cots
 cots read <id> [--ai] [--raw]                 # <folder>/latest = the most recent
-cots search "text" · cots append <id> · cots set <id> --status … --pin
+cots search "text" [--here] · cots append <id> · cots trash <id> · cots set <id> --status … --pin
 cots folders · cots folder <name> · cots mkdir <name> …
 cots mcp                                      # MCP server over stdio
 ```
@@ -200,13 +222,19 @@ Notes live in `~/coTs` by default. In **Settings** you can pick another folder, 
 
 ## Development
 
-Requires macOS 14+ and Swift 6. Dependencies: [Yams](https://github.com/jpsim/Yams) and [swift-argument-parser](https://github.com/apple/swift-argument-parser).
+The core and the CLI are Swift 6 and build on macOS, Windows and Linux. Dependencies: [Yams](https://github.com/jpsim/Yams) and [swift-argument-parser](https://github.com/apple/swift-argument-parser). The Windows app also needs Rust and Node.
 
 ```bash
 swift build && swift test
-scripts/make-dmg.sh                 # ad-hoc signed build/coTs.app + build/coTs-<version>.dmg
-scripts/install.sh                  # shortcut: build and copy to /Applications
-swift scripts/make-icon.swift .     # regenerates the icon (then iconutil, see the script)
+
+# macOS app (macOS 14+)
+apps/macos/scripts/make-dmg.sh      # ad-hoc signed build/coTs.app + build/coTs-<version>-macos-<arch>.dmg
+apps/macos/scripts/install.sh       # shortcut: build and copy to /Applications
+swift apps/macos/scripts/make-icon.swift .   # regenerates the icon (then iconutil, see the script)
+
+# Windows app (also runs on macOS for development)
+apps/windows/scripts/prepare-cli.sh # or prepare-cli.ps1 on Windows: builds cots next to the app
+cd apps/windows && npm install && npm run dev
 
 # Visual QA without a screen: sample data + renders of the real views
 # (the README screenshots come from here, copied to docs/screenshots)
@@ -216,16 +244,21 @@ COTS_HOME=/tmp/cots-fx/notes .build/debug/CotsApp --snapshot /tmp/cots-fx/shots 
 
 | Path | Contents |
 |---|---|
-| `Sources/CotsCore` | `Model` (note types), `Format` (YAML frontmatter), `Storage` (store, note cache, `NoteDraft`) and `Agents` (sessions, reply cache, Claude Code hooks, MCP server). To be reused by the iOS app. |
-| `Sources/CotsIntegrations` | What the app installs for agents (CLI link, skill, Claude Code hooks, Claude Desktop MCP), each with install, remove and status. |
-| `Sources/CLI` | `cots`, one file per command in `Commands/`. |
-| `Sources/App` | SwiftUI app: `Model` (`NotesStore` for data, `Browser` for filters and selection), `Popover`, `Window`, `Settings`, `Components`. |
-| `skill/cots/SKILL.md` | Skill in the open Agent Skills format. |
-| `Resources` | Icon and translations (`es` is the base language, plus `en`). |
+| `core/CotsCore` | Shared by every app. `Model` (note types, pending tasks), `Format` (YAML frontmatter), `Storage` (store, note cache, `NoteDraft`) and `Agents` (sessions, reply cache, Claude Code hooks, MCP server). |
+| `core/CotsIntegrations` | What gets installed for agents (CLI link, skill, Claude Code hooks, Claude Desktop MCP), each with install, remove and status. |
+| `core/Tests` | Tests for both. |
+| `cli` | `cots`, one file per command in `Commands/`. Every app ships it. |
+| `apps/macos` | SwiftUI menu bar app: `Sources` (`Model`, `Popover`, `Window`, `Settings`, `Components`), `Resources` (icon, `es`/`en` translations) and `scripts` (build, DMG, install). |
+| `apps/windows` | Tauri tray app: `src` (the window, HTML/JS) and `src-tauri` (Rust: tray, CLI calls, Markdown, folder watcher, installer). |
+| `skills/cots/SKILL.md` | Skill in the open Agent Skills format; `scripts/package-skill.sh` builds the ZIP for Agensi. |
+| `assets` | Icon source shared by both apps. |
+| `scripts` | Version (`set-version.sh`, `check-version.sh`), skill package and sample data. |
+| `docs` | Screenshots, [how to release](docs/RELEASING.md), release notes and the Agensi listing. |
 
 To distribute to other Macs without the "unidentified developer" warning, sign with a Developer ID and notarize.
 
 ## Roadmap
 
 - iOS app reusing `CotsCore`.
-- System notifications when an AI leaves a note.
+- System notifications on macOS when an AI leaves a note (Windows already has them).
+- Code signing for the Windows installer.

@@ -1,11 +1,14 @@
 ---
 name: cots
-description: Guarda notas y planes en coTs, la app de notas de la barra de menú del usuario, mediante el CLI `cots`. Úsala cuando el usuario diga "guarda en cots [carpeta]", "guarda esto/el informe en cots", "hagamos un plan en cots", "plan en cots", pregunte por sus pendientes, tareas o TODOs ("qué tengo pendiente en cots", "en qué estábamos"), o pida leer, buscar o continuar notas o planes de coTs. También en inglés: "save in/to cots [folder]", "let's make a plan in cots", "what's pending in cots".
+description: >-
+  Guarda notas y planes en coTs, la app de notas del usuario (barra de menú en macOS, bandeja del sistema en Windows), mediante el CLI `cots`. Úsala cuando el usuario diga "guarda en cots [carpeta]", "guarda esto/el informe en cots", "hagamos un plan en cots", "plan en cots", pregunte por sus pendientes, tareas o TODOs ("qué tengo pendiente en cots", "en qué estábamos"), o pida leer, buscar o continuar notas o planes de coTs. También en inglés: "save in/to cots [folder]", "let's make a plan in cots", "what's pending in cots".
 ---
 
 # coTs
 
 coTs guarda notas Markdown en carpetas (`code-notes` por defecto, `plans` para los planes). Siempre usa el CLI `cots` y nunca edites los archivos a mano. El topic (el proyecto) se detecta solo a partir del directorio actual.
+
+Si el comando `cots` no existe, dile al usuario que instale coTs (macOS o Windows) desde https://github.com/fresnohernandez99/cots/releases y que lo abra una vez. La app pone el CLI en el PATH. No intentes instalarlo tú.
 
 ## "guarda en cots [carpeta]"
 

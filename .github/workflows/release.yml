@@ -1,0 +1,74 @@
+# A tag builds every app and drafts the GitHub release:
+#   v0.7.0-rc.1 → pre-release "coTs 0.7.0 RC 1";  v0.7.0 → release "coTs 0.7.0".
+# Assets: coTs-<tag>-macos-<arch>.dmg, coTs-<tag>-windows-x64-setup.exe and
+# cots-skill-<version>.zip (the package uploaded to Agensi). The draft is published by hand.
+name: Release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/check-version.sh "$GITHUB_REF_NAME"
+      - run: swift test
+      - run: RELEASE="${GITHUB_REF_NAME#v}" apps/macos/scripts/make-dmg.sh
+      - run: scripts/package-skill.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: |
+            build/*.dmg
+            build/cots-skill-*.zip
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: compnerd/gha-setup-swift@v0.3.0
+        with:
+          branch: swift-6.2-release
+          tag: 6.2-RELEASE
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: powershell -File apps\windows\scripts\prepare-cli.ps1 -Config release
+      - working-directory: apps/windows
+        run: npm ci && npx tauri build --bundles nsis
+      - name: Name the installer after the tag
+        shell: bash
+        run: |
+          mkdir -p build
+          cp apps/windows/src-tauri/target/release/bundle/nsis/*-setup.exe "build/coTs-${GITHUB_REF_NAME#v}-windows-x64-setup.exe"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: build/*.exe
+
+  release:
+    needs: [macos, windows]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="$GITHUB_REF_NAME"; V="${TAG#v}"
+          if [[ "$V" == *-rc.* ]]; then
+            NAME="coTs ${V%%-rc.*} RC ${V##*-rc.}"; PRE=--prerelease
+          else
+            NAME="coTs $V"; PRE=
+          fi
+          (cd dist && sha256sum * > SHA256SUMS.txt)
+          gh release create "$TAG" dist/* --draft $PRE --title "$NAME" --notes-file docs/release-notes.md

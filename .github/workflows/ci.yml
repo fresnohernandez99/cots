@@ -1,0 +1,39 @@
+# Tests on every platform coTs ships to. The Windows job is the only place the
+# Windows CLI and app get compiled before a release.
+name: CI
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
+      - run: scripts/check-version.sh
+
+  linux:
+    runs-on: ubuntu-24.04
+    container: swift:6.2
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift build --product cots && swift test --filter CotsCoreTests
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: compnerd/gha-setup-swift@v0.3.0
+        with:
+          branch: swift-6.2-release
+          tag: 6.2-RELEASE
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Swift CLI
+        run: powershell -File apps\windows\scripts\prepare-cli.ps1 -Config debug
+      - name: Core tests
+        run: swift test --filter CotsCoreTests
+      - name: App tests
+        working-directory: apps/windows/src-tauri
+        run: cargo test
