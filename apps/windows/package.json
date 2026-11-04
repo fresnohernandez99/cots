@@ -1,0 +1,14 @@
+{
+  "name": "cots-windows",
+  "private": true,
+  "version": "0.6.0",
+  "description": "coTs for Windows: the tray app. Shares the notes folder and the cots CLI with the macOS app.",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.12.4"
+  }
+}

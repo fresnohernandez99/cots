@@ -9,7 +9,7 @@ public enum CotsConfig {
     /// `$HOME` when set (so tests and sandboxes can redirect everything), else the account's home.
     public static var home: URL {
         if let env = ProcessInfo.processInfo.environment["HOME"], !env.isEmpty {
-            return URL(fileURLWithPath: env, isDirectory: true)
+            return URL(fileURLWithPath: nativePath(env), isDirectory: true)
         }
         return FileManager.default.homeDirectoryForCurrentUser
     }
@@ -41,7 +41,7 @@ public enum CotsConfig {
     /// The app and the CLI share this so both always look at the same folder.
     public static func resolveRoot() -> URL {
         if let env = ProcessInfo.processInfo.environment["COTS_HOME"], !env.isEmpty {
-            return URL(fileURLWithPath: (env as NSString).expandingTildeInPath, isDirectory: true)
+            return URL(fileURLWithPath: nativePath((env as NSString).expandingTildeInPath), isDirectory: true)
         }
         if let data = try? Data(contentsOf: configURL),
            let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -56,5 +56,17 @@ public enum CotsConfig {
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let data = try JSONSerialization.data(withJSONObject: ["root": url.path], options: [.prettyPrinted])
         try data.write(to: configURL, options: .atomic)
+    }
+
+    /// Git Bash, which Claude Code uses for hooks on Windows, hands out paths like
+    /// `/c/Users/ana`; Foundation there needs `C:/Users/ana`. Unchanged elsewhere.
+    public static func nativePath(_ path: String) -> String {
+        #if os(Windows)
+        let parts = path.split(separator: "/", maxSplits: 2, omittingEmptySubsequences: false)
+        if path.hasPrefix("/"), parts.count >= 2, parts[1].count == 1, parts[1].first!.isLetter {
+            return "\(parts[1].uppercased()):/" + (parts.count > 2 ? parts[2] : "")
+        }
+        #endif
+        return path
     }
 }

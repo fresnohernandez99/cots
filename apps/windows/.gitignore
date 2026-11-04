@@ -1,0 +1,6 @@
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+# Filled by scripts/prepare-cli.*: the Swift CLI built for this machine and the skill.
+src-tauri/binaries/
+src-tauri/resources/

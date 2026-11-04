@@ -3,7 +3,7 @@ import Foundation
 public enum Topic {
     /// Name of the git repository containing `cwd`, else the folder's own name.
     public static func detect(cwd: String) -> String? {
-        var url = URL(fileURLWithPath: cwd, isDirectory: true).standardizedFileURL
+        var url = URL(fileURLWithPath: CotsConfig.nativePath(cwd), isDirectory: true).standardizedFileURL
         let start = url
         while true {
             if FileManager.default.fileExists(atPath: url.appendingPathComponent(".git").path) { return url.lastPathComponent }

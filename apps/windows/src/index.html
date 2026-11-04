@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>coTs</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="bar" data-tauri-drag-region>
+    <button class="icon back" id="back" title="Volver" hidden>‹</button>
+    <h1 data-tauri-drag-region>coTs <span id="unread" class="count" hidden></span></h1>
+    <div class="spacer" data-tauri-drag-region></div>
+    <button class="icon" id="new" title="Nueva nota (Ctrl+N)">＋</button>
+    <button class="icon" id="open-settings" title="Ajustes">⚙</button>
+    <button class="icon" id="close" title="Ocultar (Esc)">✕</button>
+  </header>
+
+  <section id="list-view">
+    <div class="tools">
+      <input id="search" type="search" placeholder="Buscar" autocomplete="off">
+      <nav id="folders" class="chips"></nav>
+      <nav id="filters" class="chips">
+        <button data-filter="unread">Sin leer</button>
+        <button data-filter="pending">Por revisar</button>
+        <button data-filter="archived">Archivadas</button>
+      </nav>
+    </div>
+    <ul id="notes" class="notes"></ul>
+    <p id="empty" class="empty" hidden></p>
+  </section>
+
+  <section id="detail-view" hidden>
+    <article id="detail"></article>
+  </section>
+
+  <section id="new-view" hidden>
+    <form id="new-form" class="form">
+      <label>Carpeta <select id="new-folder"></select></label>
+      <label>Título <input id="new-title" required></label>
+      <label class="grow">Contenido (Markdown) <textarea id="new-body"></textarea></label>
+      <div class="row end">
+        <button type="button" id="new-cancel">Cancelar</button>
+        <button type="submit" class="primary">Guardar</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="settings-view" hidden>
+    <div id="settings" class="form"></div>
+  </section>
+
+  <div id="error" class="error" hidden></div>
+  <script src="app.js"></script>
+</body>
+</html>

@@ -16,7 +16,7 @@ struct Cots: ParsableCommand {
         commandName: "cots",
         abstract: "Notas en Markdown que humanos e IAs comparten. La app de la barra de menú lee la misma carpeta.",
         subcommands: [Add.self, Plan.self, Wait.self, Review.self, Hook.self, MCP.self, Append.self, List.self, Pending.self, Check.self, Read.self, Search.self, SetCmd.self,
-                      Folders.self, FolderCmd.self, Mkdir.self, Schema_.self, Root.self, Setup.self]
+                      Folders.self, FolderCmd.self, Mkdir.self, Schema_.self, Root.self, Setup.self, Trash.self, Export.self]
     )
 }
 
