@@ -20,8 +20,10 @@ let package = Package(
             dependencies: ["CotsCore", .product(name: "ArgumentParser", package: "swift-argument-parser")],
             path: "Sources/CLI"
         ),
-        .executableTarget(name: "CotsApp", dependencies: ["CotsCore"], path: "Sources/App"),
+        .target(name: "CotsIntegrations", dependencies: ["CotsCore"]),
+        .executableTarget(name: "CotsApp", dependencies: ["CotsCore", "CotsIntegrations"], path: "Sources/App"),
         .testTarget(name: "CotsCoreTests", dependencies: ["CotsCore"]),
+        .testTarget(name: "CotsIntegrationsTests", dependencies: ["CotsIntegrations"]),
     ],
     swiftLanguageModes: [.v5]
 )

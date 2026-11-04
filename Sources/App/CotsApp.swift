@@ -27,7 +27,7 @@ struct CotsApp: App {
             exit(0)
         }
         Self.registerLoginItemOnFirstLaunch()
-        Integrations.setUpOnLaunch()
+        LaunchSetup.run()
         Uninstaller.cleanUpLegacy()
         Notifier.shared.setUp()
     }

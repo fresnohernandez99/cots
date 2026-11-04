@@ -1,5 +1,6 @@
 import AppKit
 import CotsCore
+import CotsIntegrations
 import ServiceManagement
 import SwiftUI
 
@@ -430,12 +431,11 @@ struct SettingsView: View {
     @Environment(AppModel.self) private var model
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
     @State private var loginError: String?
-    @State private var cliLink = Integrations.installedCLI
-    @State private var skillInstalled = Integrations.skillInstalled
-    @State private var hooksInstalled = Integrations.hooksInstalled
-    @State private var claudeDesktopMCP = Integrations.mcpInstalledInClaudeDesktop
+    private let integrations = Integrations.all(.current())
+    /// Bumped after every install or removal, so the rows read their status from disk again.
+    @State private var revision = 0
     @State private var copiedMCPConfig = false
-    @State private var integrationErrors = Integrations.lastErrors
+    @State private var integrationErrors = LaunchSetup.lastErrors
     @State private var language = AppLanguage.current
     @State private var confirmingUninstall = false
     @State private var deleteNotes = false
@@ -477,24 +477,10 @@ struct SettingsView: View {
                 }
             }
             Section {
-                integrationRow("CLI `cots`", installed: cliLink != nil, detail: cliLink?.path) {
-                    if cliLink == nil { try Integrations.installCLI() } else { Integrations.removeCLI() }
-                }
-                integrationRow("Skill (Claude Code, Codex, Gemini)", installed: skillInstalled,
-                               detail: "~/.claude/skills · ~/.agents/skills") {
-                    if skillInstalled { Integrations.removeSkill() } else { try Integrations.installSkill() }
-                }
-                integrationRow("Guardado directo en Claude Code (hooks)", installed: hooksInstalled,
-                               detail: "~/.claude/settings.json") {
-                    if hooksInstalled { Integrations.removeHooks() } else { try Integrations.installHooks() }
-                }
-                integrationRow("Claude Desktop (MCP)", installed: claudeDesktopMCP,
-                               detail: "claude_desktop_config.json") {
-                    if claudeDesktopMCP { Integrations.removeMCPFromClaudeDesktop() } else { try Integrations.installMCPInClaudeDesktop() }
-                }
+                ForEach(integrations.indices, id: \.self) { i in integrationRow(integrations[i]).id("\(revision)-\(i)") }
                 LabeledContent("ChatGPT y otros clientes MCP") {
                     Button(copiedMCPConfig ? "Copiado" : "Copiar configuración") {
-                        Clipboard.copy(Integrations.mcpManualConfig)
+                        Clipboard.copy(ClaudeDesktopIntegration(env: .current()).manualConfig)
                         copiedMCPConfig = true
                     }
                     .font(.caption)
@@ -524,17 +510,18 @@ struct SettingsView: View {
         .sheet(isPresented: $confirmingUninstall) { uninstallSheet }
     }
 
-    private func integrationRow(_ title: LocalizedStringKey, installed: Bool, detail: String?,
-                                toggle: @escaping () throws -> Void) -> some View {
-        LabeledContent(title) {
+    private func integrationRow(_ integration: any Integration) -> some View {
+        LabeledContent(LocalizedStringKey(integration.title)) {
             HStack {
-                if installed {
-                    Label { Text(verbatim: detail ?? "") } icon: { Image(systemName: "checkmark.circle.fill").foregroundStyle(.green) }
-                        .foregroundStyle(.secondary)
+                if integration.isInstalled {
+                    Label { Text(verbatim: integration.location ?? "") } icon: {
+                        Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                    }
+                    .foregroundStyle(.secondary)
                 } else {
                     Text("No instalado").foregroundStyle(.secondary)
                 }
-                Button(installed ? "Quitar" : "Instalar") { integration(toggle) }
+                Button(integration.isInstalled ? "Quitar" : "Instalar") { toggle(integration) }
             }
             .font(.caption)
         }
@@ -570,17 +557,14 @@ struct SettingsView: View {
         .frame(width: 440)
     }
 
-    private func integration(_ work: () throws -> Void) {
+    private func toggle(_ integration: any Integration) {
         do {
-            try work()
+            if integration.isInstalled { integration.remove() } else { try integration.install() }
             integrationErrors = []
         } catch {
             integrationErrors = [error.localizedDescription]
         }
-        cliLink = Integrations.installedCLI
-        skillInstalled = Integrations.skillInstalled
-        hooksInstalled = Integrations.hooksInstalled
-        claudeDesktopMCP = Integrations.mcpInstalledInClaudeDesktop
+        revision += 1
     }
 
     private func chooseRoot() {
