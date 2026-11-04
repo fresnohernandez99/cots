@@ -24,7 +24,7 @@ enum LaunchSetup {
 /// Removes everything the app put on the system. Notes are only removed on request,
 /// and go to the Trash rather than being deleted.
 enum Uninstaller {
-    private static let fm = FileManager.default
+    private static var fm: FileManager { .default }
 
     static var bundleID: String { Bundle.main.bundleIdentifier ?? CotsConfig.bundleID }
 

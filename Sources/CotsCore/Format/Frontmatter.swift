@@ -16,7 +16,7 @@ public enum Frontmatter {
             let lineEnd = bytes[lineStart...].firstIndex(of: UInt8(ascii: "\n")) ?? bytes.endIndex
             let line = bytes[lineStart..<lineEnd]
             if line.elementsEqual("---".utf8) || line.elementsEqual("...".utf8) {
-                let yaml = lineStart > start ? String(normalized[start..<bytes.index(before: lineStart)]) ?? "" : ""
+                let yaml = lineStart > start ? String(normalized[start..<bytes.index(before: lineStart)]) : ""
                 var body = lineEnd < bytes.endIndex ? String(normalized[bytes.index(after: lineEnd)...]) : ""
                 if body.hasPrefix("\n") { body.removeFirst() }
                 return (yaml, body)

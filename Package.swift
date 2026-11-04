@@ -25,5 +25,5 @@ let package = Package(
         .testTarget(name: "CotsCoreTests", dependencies: ["CotsCore"]),
         .testTarget(name: "CotsIntegrationsTests", dependencies: ["CotsIntegrations"]),
     ],
-    swiftLanguageModes: [.v5]
+    swiftLanguageModes: [.v6]
 )

@@ -185,7 +185,7 @@ public final class MCPServer {
     puede haberlo editado. Para leer, empieza por list_notes (sin bodies) y abre solo lo necesario con read_note.
     """
 
-    static let tools: [[String: Any]] = [
+    static var tools: [[String: Any]] { [
         tool("list_folders", "Lista las carpetas de coTs con su descripción e instrucciones para IAs.", [:]),
         tool("list_notes", "Lista notas (id, fecha, topic, título, summary), sin el contenido. Barato en contexto.", [
             "folder": prop("string", "Carpeta, p. ej. code-notes o plans. Todas si se omite."),
@@ -228,7 +228,7 @@ public final class MCPServer {
             "id": prop("string", "Id del plan."),
             "wait_seconds": prop("number", "Esperar hasta N segundos (máx. 50) a que decida."),
         ], required: ["id"], readOnly: true),
-    ]
+    ] }
 
     private static func tool(_ name: String, _ description: String, _ properties: [String: Any],
                              required: [String] = [], readOnly: Bool = false) -> [String: Any] {

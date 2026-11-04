@@ -1,7 +1,9 @@
 import Foundation
 
 public enum Timestamp {
-    private static let formatter: ISO8601DateFormatter = {
+    // Thread-safe for parsing and formatting; only reconfiguring it isn't, and it's never
+    // changed after creation. (Unlike DateFormatter, it isn't marked Sendable.)
+    nonisolated(unsafe) private static let formatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
         f.timeZone = .current
