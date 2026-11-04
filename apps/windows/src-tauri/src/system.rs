@@ -7,8 +7,12 @@ use std::path::Path;
 
 /// First launch installs everything; later launches refresh what's installed so it
 /// points at this copy of the app. Returns the errors to show in Ajustes.
+///
+/// The marker holds the version that set things up. An update runs the old version's
+/// uninstaller, which removes the integrations, so a new version counts as a first launch.
 pub fn set_up(marker: &Path) -> Vec<String> {
-    let first = !marker.exists();
+    let version = env!("CARGO_PKG_VERSION");
+    let first = std::fs::read_to_string(marker).map_or(true, |v| v.trim() != version);
     let mut errors = Vec::new();
     if let Err(e) = path::add() {
         errors.push(format!("PATH: {e}"));
@@ -19,7 +23,7 @@ pub fn set_up(marker: &Path) -> Vec<String> {
             if let Some(dir) = marker.parent() {
                 let _ = std::fs::create_dir_all(dir);
             }
-            let _ = std::fs::write(marker, "");
+            let _ = std::fs::write(marker, version);
         }
         Err(e) => errors.extend(e.lines().map(str::to_string)),
     }
@@ -34,7 +38,8 @@ pub fn tear_down() {
 
 #[cfg(windows)]
 mod path {
-    use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_WRITE};
+    use winreg::enums::{HKEY_CURRENT_USER, KEY_READ, KEY_WRITE, REG_EXPAND_SZ};
+    use winreg::types::{FromRegValue, ToRegValue};
     use winreg::RegKey;
 
     fn install_dir() -> Result<String, String> {
@@ -50,10 +55,19 @@ mod path {
         let env = RegKey::predef(HKEY_CURRENT_USER)
             .open_subkey_with_flags("Environment", KEY_READ | KEY_WRITE)
             .map_err(|e| e.to_string())?;
-        let current: String = env.get_value("Path").unwrap_or_default();
+        // Windows stores the user Path as REG_EXPAND_SZ with entries like
+        // %USERPROFILE%\...\WindowsApps; writing it back as REG_SZ would stop those from
+        // expanding. Keep the type, and never write anything after a failed read.
+        let (current, vtype) = match env.get_raw_value("Path") {
+            Ok(value) => (String::from_reg_value(&value).map_err(|e| e.to_string())?, value.vtype),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => (String::new(), REG_EXPAND_SZ),
+            Err(e) => return Err(e.to_string()),
+        };
         let mut list = entries(&current);
         if change(&mut list) {
-            env.set_value("Path", &list.join(";")).map_err(|e| e.to_string())?;
+            let mut value = list.join(";").to_reg_value();
+            value.vtype = vtype;
+            env.set_raw_value("Path", &value).map_err(|e| e.to_string())?;
             broadcast();
         }
         Ok(())

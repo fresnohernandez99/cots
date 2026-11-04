@@ -32,7 +32,7 @@ struct NoteList: View {
                             Image(systemName: "chevron.right")
                                 .rotationEffect(.degrees(browser.showFinishedPlans ? 90 : 0))
                             Text("Planes terminados")
-                            Text(verbatim: "\(finished.count)").foregroundStyle(.tertiary)
+                            Text(verbatim: "\(finished.count)").foregroundStyle(.secondary)
                             Spacer()
                         }
                         .font(.caption.weight(.semibold))

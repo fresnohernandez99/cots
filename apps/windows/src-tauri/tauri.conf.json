@@ -32,8 +32,7 @@
   "bundle": {
     "active": true,
     "targets": [
-      "nsis",
-      "msi"
+      "nsis"
     ],
     "publisher": "Eddy Yoel Fresno Hernández",
     "shortDescription": "Notas Markdown que humanos e IAs comparten",
@@ -49,7 +48,8 @@
       "binaries/cots"
     ],
     "resources": {
-      "resources/skill/": "skill/"
+      "resources/skill/": "skill/",
+      "resources/runtime/": "./"
     },
     "windows": {
       "nsis": {

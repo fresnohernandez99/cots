@@ -12,8 +12,8 @@ Todas las apps comparten una versión: la del archivo `VERSION`.
 
 1. `scripts/set-version.sh 0.7.0` si cambia la versión, y actualiza `docs/release-notes.md`.
 2. Commit, y luego el tag de la candidata: `git tag v0.7.0-rc.1 && git push origin master v0.7.0-rc.1`.
-3. GitHub Actions (`.github/workflows/release.yml`) compila y deja un **borrador** de pre-release, «coTs 0.7.0 RC 1», con:
-   - `coTs-0.7.0-rc.1-macos-<arch>.dmg`
+3. GitHub Actions (`.github/workflows/release.yml`) pasa el CI completo (si falla, no hay release), compila y deja un **borrador** de pre-release, «coTs 0.7.0 RC 1», con:
+   - `coTs-0.7.0-rc.1-macos-universal.dmg` (Intel y Apple Silicon)
    - `coTs-0.7.0-rc.1-windows-x64-setup.exe`
    - `cots-skill-0.7.0.zip`
    - `SHA256SUMS.txt`
@@ -23,7 +23,7 @@ La versión final es el mismo proceso con el tag `v0.7.0`. Las apps llevan `0.7.
 
 ## Localmente
 
-- macOS: `RELEASE=0.7.0-rc.1 apps/macos/scripts/make-dmg.sh` → `build/coTs-0.7.0-rc.1-macos-<arch>.dmg`.
+- macOS: `RELEASE=0.7.0-rc.1 apps/macos/scripts/make-dmg.sh` → `build/coTs-0.7.0-rc.1-macos-universal.dmg`.
 - Windows (en Windows): `apps\windows\scripts\prepare-cli.ps1`, luego en `apps\windows`: `npm ci; npx tauri build`.
 
 ## Skill en Agensi

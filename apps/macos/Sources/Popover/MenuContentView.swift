@@ -25,10 +25,10 @@ struct MenuContentView: View {
                 HStack(spacing: 6) {
                     TextField("Buscar", text: $browser.search)
                         .textFieldStyle(.roundedBorder)
-                    Button { creating = true } label: { Image(systemName: "square.and.pencil") }
+                    Button { creating = true } label: { Label("Nueva nota", systemImage: "square.and.pencil").labelStyle(.iconOnly) }
                         .help("Nueva nota")
                     Button { activate { openWindow(id: "main") } } label: {
-                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        Label("Abrir expandida", systemImage: "arrow.up.left.and.arrow.down.right").labelStyle(.iconOnly)
                     }
                     .help("Abrir expandida")
                     Menu {
@@ -37,7 +37,7 @@ struct MenuContentView: View {
                         Toggle("Ver archivadas", isOn: $browser.showArchived)
                         Divider()
                         Button("Salir de coTs") { NSApp.terminate(nil) }
-                    } label: { Image(systemName: "ellipsis.circle") }
+                    } label: { Label("Más", systemImage: "ellipsis.circle").labelStyle(.iconOnly) }
                         .menuIndicator(.hidden)
                         .fixedSize()
                 }

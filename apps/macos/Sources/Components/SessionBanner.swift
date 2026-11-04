@@ -20,7 +20,7 @@ struct SessionBanner: View {
                     Text(last, format: .relative(presentation: .named)).foregroundStyle(.secondary)
                 }
                 Spacer()
-                if resume == .dismissed { Text("Descartada").foregroundStyle(.tertiary) }
+                if resume == .dismissed { Text("Descartada").foregroundStyle(.secondary) }
             }
             .font(.caption)
             HStack {

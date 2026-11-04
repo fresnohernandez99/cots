@@ -65,6 +65,14 @@ enum Palette {
             : NSColor(srgbRed: 0.698, green: 0.314, blue: 0, alpha: 1)
     })
 
+    /// "Por revisar": the same blue as on Windows, readable as text in both modes
+    /// (5.4:1 light, 6.7:1 dark). System orange was 2.2:1 on white.
+    static let pendingBlue = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            ? NSColor(srgbRed: 0.353, green: 0.663, blue: 1, alpha: 1)
+            : NSColor(srgbRed: 0.039, green: 0.4, blue: 0.839, alpha: 1)
+    })
+
     /// Amber fill for prominent buttons with white text (5.2:1), in both modes.
     static let amberFill = Color(nsColor: NSColor(srgbRed: 0.698, green: 0.314, blue: 0, alpha: 1))
 

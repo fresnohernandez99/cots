@@ -4,8 +4,12 @@ set -euo pipefail
 cd "$(dirname "$0")/../../.."
 
 VERSION="$(cat VERSION)"
-swift build -c release
-BIN="$(swift build -c release --show-bin-path)"
+# Universal by default, so one DMG runs on Intel and Apple Silicon Macs.
+# ARCHS="$(uname -m)" builds only for this Mac, faster while developing.
+ARCH_FLAGS=()
+for arch in ${ARCHS:-arm64 x86_64}; do ARCH_FLAGS+=(--arch "$arch"); done
+swift build -c release "${ARCH_FLAGS[@]}"
+BIN="$(swift build -c release "${ARCH_FLAGS[@]}" --show-bin-path)"
 APP="build/coTs.app"
 
 rm -rf "$APP"

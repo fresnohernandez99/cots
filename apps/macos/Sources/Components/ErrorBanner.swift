@@ -10,7 +10,7 @@ struct ErrorBanner: View {
             Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(.orange)
             Text(verbatim: message).font(.caption).lineLimit(3)
             Spacer()
-            Button(action: dismiss) { Image(systemName: "xmark") }.buttonStyle(.borderless)
+            Button(action: dismiss) { Label("Cerrar", systemImage: "xmark").labelStyle(.iconOnly) }.buttonStyle(.borderless)
         }
         .padding(8)
         .background(.orange.opacity(0.1))

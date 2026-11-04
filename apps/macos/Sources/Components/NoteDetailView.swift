@@ -87,7 +87,9 @@ struct NoteDetailView: View {
                     if note.folder == Sessions.folder { Text("Sesión") } else { Text(verbatim: config?.title ?? note.folder) }
                     Text(verbatim: "·")
                     Text(note.date, format: .dateTime.day().month().hour().minute())
-                    if let source = note.meta.source { Text(verbatim: "· \(source)") }
+                    if let source = note.meta.source {
+                        if source == "user" { Text("· por ti") } else { Text(verbatim: "· \(source)") }
+                    }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -167,7 +169,7 @@ struct NoteDetailView: View {
             HStack {
                 ReviewBadge(status: status)
                 if let at = note.meta.review?.at.flatMap(Timestamp.parse), status != .pending {
-                    Text(at, format: .relative(presentation: .named)).font(.caption2).foregroundStyle(.tertiary)
+                    Text(at, format: .relative(presentation: .named)).font(.caption2).foregroundStyle(.secondary)
                 }
                 Spacer()
                 if status != .pending {

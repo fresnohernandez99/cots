@@ -34,6 +34,7 @@ struct Add: ParsableCommand {
     @Option(parsing: .unconditional, help: "Body en línea (alternativa a stdin).") var body: String?
     @Option(name: .customLong("file"), help: "Leer la nota/body de un archivo.") var file: String?
     @Flag(help: "Usar como body tu última respuesta (capturada por el hook; no la reescribas).") var fromLastReply = false
+    @Flag(help: "El body es solo texto: un '---' inicial no se toma como frontmatter (para texto escrito por una persona).") var rawBody = false
     @Flag var json = false
 
     func run() throws {
@@ -47,7 +48,7 @@ struct Add: ParsableCommand {
             input = try file.map { try String(contentsOfFile: ($0 as NSString).expandingTildeInPath, encoding: .utf8) }
                 ?? body ?? readStdinIfPiped() ?? ""
         }
-        let (yaml, parsedBody) = Frontmatter.split(input)
+        let (yaml, parsedBody) = rawBody ? (nil, input) : Frontmatter.split(input)
         var draft = NoteDraft(folder: folder, body: parsedBody)
         draft.base = try Frontmatter.parse(yaml)
         draft.title = title

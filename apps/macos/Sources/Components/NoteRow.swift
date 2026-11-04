@@ -7,13 +7,20 @@ struct TopicChip: View {
     var muted = false
 
     var body: some View {
+        // The hue goes on the dot and the tint; the name stays in the primary text color,
+        // since yellow, mint or green text on a light background is unreadable.
         let color = muted ? Color.gray : Palette.topicColor(topic)
-        Text(topic)
-            .font(.caption2.weight(.medium))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .foregroundStyle(color)
-            .background(color.opacity(selected ? 0.3 : 0.14), in: Capsule())
+        HStack(spacing: 4) {
+            Circle().fill(color).frame(width: 6, height: 6)
+            Text(verbatim: topic).lineLimit(1).truncationMode(.middle)
+        }
+        .font(.caption2.weight(.medium))
+        .foregroundStyle(muted ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .frame(maxWidth: 180, alignment: .leading)
+        .fixedSize(horizontal: true, vertical: false)
+        .background(color.opacity(selected ? 0.3 : 0.16), in: Capsule())
     }
 }
 
@@ -24,6 +31,8 @@ struct ReviewBadge: View {
     var body: some View {
         Label(status.label, systemImage: status.symbol)
             .font(.caption2.weight(.medium))
+            .lineLimit(1)
+            .fixedSize()
             .foregroundStyle(muted ? Color.gray : status.color)
     }
 }
@@ -63,12 +72,13 @@ struct NoteRow: View {
                         Text(note.date, format: .relative(presentation: .named))
                     }
                     .font(.caption)
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: 0)
             if note.meta.resolvedStatus == .unread {
                 Circle().fill(Color.accentColor).frame(width: 7, height: 7).padding(.top, 6)
+                    .accessibilityLabel("Sin leer")
             }
         }
         .padding(.vertical, 5)

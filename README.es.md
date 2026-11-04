@@ -38,7 +38,7 @@
 |---|---|---|
 | App | Barra de menú, SwiftUI (`apps/macos`) | Bandeja del sistema, Tauri (`apps/windows`) |
 | Notas, CLI, skill, hooks, MCP | Compartidos | Compartidos |
-| Descarga | `coTs-<versión>-macos-<arquitectura>.dmg` | `coTs-<versión>-windows-x64-setup.exe` |
+| Descarga | `coTs-<versión>-macos-universal.dmg` | `coTs-<versión>-windows-x64-setup.exe` |
 
 Las dos leen la misma carpeta de notas con el mismo CLI `cots`, así que una carpeta sincronizada entre un Mac y un PC funciona en ambos. Las descargas están en la [página de releases](https://github.com/fresnohernandez99/cots/releases): las release candidates son pre-releases llamadas «coTs x.y.z RC n».
 
@@ -52,7 +52,7 @@ Ejecuta `coTs-<versión>-windows-x64-setup.exe`. Se instala para tu usuario (sin
 
 ### macOS
 
-1. Abre `coTs-<versión>-macos-<arquitectura>.dmg` y arrastra **coTs** a **Aplicaciones**.
+1. Abre `coTs-<versión>-macos-universal.dmg` y arrastra **coTs** a **Aplicaciones**.
 2. Ábrela. La primera vez se instala sola:
    - el arranque al iniciar sesión;
    - el CLI `cots` en `/usr/local/bin` (o `~/.local/bin`);
@@ -226,7 +226,7 @@ El núcleo y el CLI son Swift 6 y compilan en macOS, Windows y Linux. Dependenci
 swift build && swift test
 
 # App de macOS (macOS 14+)
-apps/macos/scripts/make-dmg.sh      # build/coTs.app firmada ad-hoc + build/coTs-<versión>-macos-<arq>.dmg
+apps/macos/scripts/make-dmg.sh      # build/coTs.app firmada ad-hoc + build/coTs-<versión>-macos-universal.dmg
 apps/macos/scripts/install.sh       # atajo: compila y copia a /Applications
 swift apps/macos/scripts/make-icon.swift .   # regenera el icono (luego iconutil, ver el script)
 

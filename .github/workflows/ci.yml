@@ -1,16 +1,20 @@
 # Tests on every platform coTs ships to. The Windows job is the only place the
-# Windows CLI and app get compiled before a release.
+# Windows CLI and app get compiled; release.yml runs this first and stops if it fails.
 name: CI
 on:
   push:
     branches: [master]
   pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   macos:
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: swift test
       - run: scripts/check-version.sh
 
@@ -18,22 +22,23 @@ jobs:
     runs-on: ubuntu-24.04
     container: swift:6.2
     steps:
-      - uses: actions/checkout@v4
-      - run: swift build --product cots && swift test --filter CotsCoreTests
+      - uses: actions/checkout@v7
+      - run: swift test
 
   windows:
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
-      - uses: compnerd/gha-setup-swift@v0.3.0
+      - uses: actions/checkout@v7
+      # Third-party actions are pinned to a commit.
+      - uses: compnerd/gha-setup-swift@581df1ffa3f3e786ddc73ff37364ee231f9644c5 # v0.3.0
         with:
           branch: swift-6.2-release
           tag: 6.2-RELEASE
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Swift CLI
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - name: Swift CLI and its runtime (fails if cots.exe can't run without Swift installed)
         run: powershell -File apps\windows\scripts\prepare-cli.ps1 -Config debug
-      - name: Core tests
-        run: swift test --filter CotsCoreTests
+      - name: Core and integration tests
+        run: swift test
       - name: App tests
         working-directory: apps/windows/src-tauri
         run: cargo test

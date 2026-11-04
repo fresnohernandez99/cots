@@ -137,3 +137,5 @@
 "Copiado" = "Copied";
 "En ChatGPT: Ajustes → Plugins → añadir servidor MCP local, con este comando y el argumento mcp." = "In ChatGPT: Settings → Plugins → add a local MCP server with this command and the mcp argument.";
 "«guarda en cots [carpeta]» guarda la última respuesta sin pasar por la IA (0 tokens). «hagamos un plan en cots» crea un plan que revisas aquí. Claude Desktop y ChatGPT usan coTs por MCP; reinícialos tras instalarlo." = "“save in cots [folder]” saves the last reply without going through the AI (0 tokens). “let's make a plan in cots” creates a plan you review here. Claude Desktop and ChatGPT use coTs over MCP; restart them after installing.";
+
+"· por ti" = "· by you";

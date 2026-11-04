@@ -22,6 +22,8 @@ use tauri_plugin_positioner::{Position, WindowExt};
 
 #[derive(Default)]
 struct AppState {
+    /// "es" or "en", from the window (the system language), for notifications and the tooltip.
+    lang: Mutex<String>,
     /// What each note looked like at the last load, to notify only about what's new.
     /// None until the first load: notes already there at launch aren't news.
     seen: Mutex<Option<HashMap<String, Seen>>>,
@@ -37,14 +39,19 @@ struct Seen {
 // MARK: - Reading
 
 /// Every folder and note, in one CLI call (one disk pass).
-#[tauri::command]
+#[tauri::command(async)]
 fn load(app: AppHandle, state: tauri::State<AppState>) -> Result<Value, String> {
     let data = cli::json(&["export"])?;
     let notes = data["notes"].as_array().cloned().unwrap_or_default();
     notify_new(&app, &state, &notes);
     let unread = notes.iter().filter(|n| n["meta"]["status"] == "unread").count();
+    let english = *state.lang.lock().unwrap() == "en";
     if let Some(tray) = state.tray.lock().unwrap().as_ref() {
-        let tip = if unread == 0 { "coTs".to_string() } else { format!("coTs · {unread} sin leer") };
+        let tip = match (unread, english) {
+            (0, _) => "coTs".to_string(),
+            (n, true) => format!("coTs · {n} unread"),
+            (n, false) => format!("coTs · {n} sin leer"),
+        };
         let _ = tray.set_tooltip(Some(tip));
     }
     Ok(data)
@@ -60,6 +67,8 @@ fn notify_new(app: &AppHandle, state: &AppState, notes: &[Value]) {
         .iter()
         .filter_map(|n| Some((n["id"].as_str()?.to_string(), Seen { review: review_of(n) })))
         .collect();
+    let english = *state.lang.lock().unwrap() == "en";
+    let (plan_text, note_text) = if english { ("Plan to review", "New note") } else { ("Plan por revisar", "Nueva nota") };
     let mut seen = state.seen.lock().unwrap();
     if let Some(previous) = seen.as_ref() {
         for note in notes {
@@ -70,10 +79,10 @@ fn notify_new(app: &AppHandle, state: &AppState, notes: &[Value]) {
             let (heading, show) = if review.as_deref() == Some("pending")
                 && previous.get(id).map_or(true, |s| s.review.as_deref() != Some("pending"))
             {
-                ("Plan por revisar", true)
+                (plan_text, true)
             } else {
                 let by_agent = note["meta"]["source"].as_str().map_or(false, |s| s != "user");
-                ("Nueva nota", is_new && by_agent && note["meta"]["status"] == "unread")
+                (note_text, is_new && by_agent && note["meta"]["status"] == "unread")
             };
             if show {
                 let _ = app.notification().builder().title(heading).body(title).show();
@@ -88,41 +97,66 @@ fn render(markdown: String) -> String {
     markdown::render(&markdown)
 }
 
-// MARK: - Writing (all through the CLI)
-
 #[tauri::command]
-fn set_status(id: String, status: String) -> Result<(), String> {
-    cli::run(&["set", &id, "--status", &status]).map(|_| ())
+fn set_language(state: tauri::State<AppState>, lang: String) {
+    *state.lang.lock().unwrap() = if lang.starts_with("es") { "es".into() } else { "en".into() };
 }
 
-#[tauri::command]
+// MARK: - Writing (all through the CLI)
+
+#[tauri::command(async)]
+fn set_status(id: String, status: String) -> Result<(), String> {
+    cli::run(&["set", &id, &format!("--status={status}")]).map(|_| ())
+}
+
+#[tauri::command(async)]
 fn set_pinned(id: String, pinned: bool) -> Result<(), String> {
     cli::run(&["set", &id, if pinned { "--pin" } else { "--no-pin" }]).map(|_| ())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn review(id: String, status: String, comment: Option<String>) -> Result<(), String> {
-    let mut args = vec!["review", &id, &status];
+    // `--x=value` and `--` keep text that starts with "-" from being read as a flag.
     let comment = comment.unwrap_or_default();
+    let comment_arg = format!("--comment={comment}");
+    let mut args = vec!["review"];
     if !comment.trim().is_empty() {
-        args.extend(["--comment", &comment]);
+        args.push(&comment_arg);
     }
+    args.extend(["--", &id, &status]);
     cli::run(&args).map(|_| ())
 }
 
-#[tauri::command]
-fn check(id: String, task: String) -> Result<(), String> {
-    cli::run(&["check", &id, &task]).map(|_| ())
+/// Ticks the task on `line` of the body (1-based), exactly that one.
+#[tauri::command(async)]
+fn check(id: String, line: u32) -> Result<(), String> {
+    cli::run(&["check", &format!("--line={line}"), "--", &id]).map(|_| ())
 }
 
-#[tauri::command]
-fn trash(id: String) -> Result<(), String> {
-    cli::run(&["trash", &id]).map(|_| ())
+/// To the Windows Recycle Bin, where people look for deleted things (the CLI's own
+/// trash, used on platforms without one, is a hidden folder). Only notes in the folder.
+#[tauri::command(async)]
+fn trash(path: String) -> Result<(), String> {
+    let root = std::fs::canonicalize(cli::run(&["root"])?.trim()).map_err(|e| e.to_string())?;
+    let file = std::fs::canonicalize(&path).map_err(|e| e.to_string())?;
+    if !file.starts_with(&root) || file.extension().map_or(true, |e| e != "md") {
+        return Err("Solo se pueden borrar notas".into());
+    }
+    trash::delete(&file).map_err(|e| e.to_string())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 fn add_note(folder: String, title: String, body: String) -> Result<String, String> {
-    let out = cli::run(&["add", &folder, "--title", &title, "--source", "user", "--no-topic", "--body", &body])?;
+    let out = cli::run(&[
+        "add",
+        &format!("--title={title}"),
+        &format!("--body={body}"),
+        "--raw-body",
+        "--source=user",
+        "--no-topic",
+        "--",
+        &folder,
+    ])?;
     Ok(out.trim().to_string())
 }
 
@@ -176,12 +210,13 @@ fn reveal(app: AppHandle, path: String) -> Result<(), String> {
 
 // MARK: - Settings
 
-#[tauri::command]
+#[tauri::command(async)]
 fn settings(app: AppHandle, state: tauri::State<AppState>) -> Value {
     json!({
         "version": app.package_info().version.to_string(),
         "root": cli::run(&["root"]).map(|r| r.trim().to_string()).unwrap_or_default(),
         "autostart": app.autolaunch().is_enabled().unwrap_or(false),
+        "cli": cli::path().is_ok(),
         "integrations": cli::json(&["setup", "--status", "--json"]).map(|v| v["integrations"].clone()).unwrap_or(Value::Null),
         "errors": *state.setup_errors.lock().unwrap(),
     })
@@ -196,7 +231,7 @@ fn set_autostart(app: AppHandle, on: bool) -> Result<(), String> {
 }
 
 /// Installs everything again, including what only the first launch sets up.
-#[tauri::command]
+#[tauri::command(async)]
 fn reinstall(app: AppHandle, state: tauri::State<AppState>) -> Value {
     let marker = setup_marker(&app);
     let _ = std::fs::remove_file(&marker);
@@ -309,7 +344,7 @@ fn main() {
         .plugin(tauri_plugin_positioner::init())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
-            load, render, set_status, set_pinned, review, check, trash, add_note,
+            load, render, set_language, set_status, set_pinned, review, check, trash, add_note,
             open_url, open_path, reveal, settings, set_autostart, reinstall, hide
         ])
         .setup(|app| {

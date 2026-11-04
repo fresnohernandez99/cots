@@ -37,7 +37,7 @@ extension ReviewStatus {
 
     var color: Color {
         switch self {
-        case .pending: return .orange
+        case .pending: return Palette.pendingBlue
         case .approved: return .green
         case .changes: return Palette.amber
         case .rejected: return .red

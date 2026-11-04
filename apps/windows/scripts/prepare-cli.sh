@@ -11,7 +11,8 @@ BIN="$(swift build -c "$CONFIG" --show-bin-path)/cots"
 TRIPLE="$(rustc -vV | sed -n 's/^host: //p')"
 TAURI=apps/windows/src-tauri
 
-mkdir -p "$TAURI/binaries" "$TAURI/resources"
+# resources/runtime holds the Swift DLLs on Windows; elsewhere it's empty but must exist.
+mkdir -p "$TAURI/binaries" "$TAURI/resources/runtime"
 cp "$BIN" "$TAURI/binaries/cots-$TRIPLE"
 rm -rf "$TAURI/resources/skill"
 cp -R skills/cots "$TAURI/resources/skill"

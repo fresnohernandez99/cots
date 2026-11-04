@@ -1,25 +1,30 @@
 # A tag builds every app and drafts the GitHub release:
 #   v0.7.0-rc.1 → pre-release "coTs 0.7.0 RC 1";  v0.7.0 → release "coTs 0.7.0".
-# Assets: coTs-<tag>-macos-<arch>.dmg, coTs-<tag>-windows-x64-setup.exe and
+# Assets: coTs-<tag>-macos-universal.dmg, coTs-<tag>-windows-x64-setup.exe and
 # cots-skill-<version>.zip (the package uploaded to Agensi). The draft is published by hand.
 name: Release
 on:
   push:
     tags: ["v*"]
 
+# Read-only by default; only the job that creates the release can write.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   macos:
+    needs: ci
     runs-on: macos-15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - run: scripts/check-version.sh "$GITHUB_REF_NAME"
-      - run: swift test
+      # Universal: one DMG for Intel and Apple Silicon.
       - run: RELEASE="${GITHUB_REF_NAME#v}" apps/macos/scripts/make-dmg.sh
       - run: scripts/package-skill.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos
           path: |
@@ -27,26 +32,35 @@ jobs:
             build/cots-skill-*.zip
 
   windows:
+    needs: ci
     runs-on: windows-2022
     steps:
-      - uses: actions/checkout@v4
-      - uses: compnerd/gha-setup-swift@v0.3.0
+      - uses: actions/checkout@v7
+      - uses: compnerd/gha-setup-swift@581df1ffa3f3e786ddc73ff37364ee231f9644c5 # v0.3.0
         with:
           branch: swift-6.2-release
           tag: 6.2-RELEASE
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/setup-node@v4
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
       - run: powershell -File apps\windows\scripts\prepare-cli.ps1 -Config release
       - working-directory: apps/windows
         run: npm ci && npx tauri build --bundles nsis
+      - name: The app folder runs cots without Swift installed
+        shell: pwsh
+        run: |
+          $dir = "apps\windows\src-tauri\target\release"
+          if (-not (Test-Path "$dir\swiftCore.dll")) { throw "Faltan las DLL de Swift junto a cots.exe" }
+          $env:Path = "$((Resolve-Path $dir).Path);$env:SystemRoot\System32;$env:SystemRoot"
+          & "$dir\cots.exe" --version
+          if ($LASTEXITCODE -ne 0) { throw "cots.exe no arranca" }
       - name: Name the installer after the tag
         shell: bash
         run: |
           mkdir -p build
           cp apps/windows/src-tauri/target/release/bundle/nsis/*-setup.exe "build/coTs-${GITHUB_REF_NAME#v}-windows-x64-setup.exe"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: build/*.exe
@@ -54,9 +68,11 @@ jobs:
   release:
     needs: [macos, windows]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true

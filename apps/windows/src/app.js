@@ -8,6 +8,7 @@ const { listen } = window.__TAURI__.event;
 const $ = (id) => document.getElementById(id);
 const state = {
   data: { notes: [], folders: [], root: "" },
+  loaded: false,
   folder: null,
   filter: null,
   query: "",
@@ -17,49 +18,49 @@ const state = {
 
 // MARK: - Helpers
 
+// Dots and bars use the bright hue; topic names use a darker shade in light mode so the
+// text stays readable (≥ 4.5:1) on white.
 const PALETTE = {
-  blue: "#0a84ff", purple: "#bf5af2", pink: "#ff375f", red: "#ff453a", orange: "#ff9f0a", yellow: "#ffd60a",
-  green: "#30d158", teal: "#40c8e0", indigo: "#5e5ce6", mint: "#63e6be", brown: "#ac8e68", gray: "#8e8e93", grey: "#8e8e93",
+  blue: ["#0a84ff", "#0a66d6"], purple: ["#bf5af2", "#8e3bbf"], pink: ["#ff375f", "#c4204a"], red: ["#ff453a", "#c4271c"],
+  orange: ["#ff9f0a", "#b25000"], yellow: ["#ffd60a", "#8a6d00"], green: ["#30d158", "#1a7f37"], teal: ["#40c8e0", "#0a6f85"],
+  indigo: ["#5e5ce6", "#4b49c9"], mint: ["#63e6be", "#00796b"], brown: ["#ac8e68", "#7a5c3a"], gray: ["#8e8e93", "#636366"],
 };
+PALETTE.grey = PALETTE.gray;
 const NAMES = ["blue", "purple", "pink", "red", "orange", "yellow", "green", "teal", "indigo", "mint", "brown", "gray"];
+const dark = window.matchMedia("(prefers-color-scheme: dark)");
 
-function color(name) {
+function color(name, forText = false) {
   if (!name) return null;
   const n = name.toLowerCase();
-  if (PALETTE[n]) return PALETTE[n];
+  if (PALETTE[n]) return PALETTE[n][forText && !dark.matches ? 1 : 0];
   return /^#?[0-9a-f]{6}$/.test(n) ? (n.startsWith("#") ? n : `#${n}`) : null;
 }
 
 // Same hash as the macOS app, so a project has the same color on both.
-function topicColor(topic) {
+function topicColorName(topic) {
   let hash = 5381;
   for (const ch of topic.toLowerCase()) hash = (((hash << 5) >>> 0) + hash + ch.codePointAt(0)) >>> 0;
-  return PALETTE[NAMES[hash % (NAMES.length - 1)]];
+  return NAMES[hash % (NAMES.length - 1)];
 }
+const topicColor = (topic, forText) => color(topicColorName(topic), forText);
 
-const REVIEW = {
-  pending: ["Por revisar", "status-pending"],
-  approved: ["Aprobado", "status-approved"],
-  changes: ["Cambios pedidos", "status-changes"],
-  rejected: ["Rechazado", "status-rejected"],
-};
-
-function reviewOf(note) {
-  return note.style === "plan" ? note.meta.review?.status || "pending" : null;
-}
+const REVIEW_CLASS = { pending: "status-pending", approved: "status-approved", changes: "status-changes", rejected: "status-rejected" };
+const reviewOf = (note) => (note.style === "plan" ? note.meta.review?.status || "pending" : null);
 
 function relative(seconds) {
   const diff = Date.now() / 1000 - seconds;
-  if (diff < 60) return "ahora";
-  if (diff < 3600) return `hace ${Math.floor(diff / 60)} min`;
+  if (diff < 60) return t("now");
+  if (diff < 3600) return t("minutesAgo", Math.floor(diff / 60));
   const date = new Date(seconds * 1000);
   const today = new Date();
-  if (date.toDateString() === today.toDateString()) return date.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit" });
+  if (date.toDateString() === today.toDateString()) return date.toLocaleTimeString(LANG, { hour: "2-digit", minute: "2-digit" });
   const yesterday = new Date(today);
   yesterday.setDate(today.getDate() - 1);
-  if (date.toDateString() === yesterday.toDateString()) return "ayer";
-  return date.toLocaleDateString("es", { day: "numeric", month: "short", year: date.getFullYear() === today.getFullYear() ? undefined : "numeric" });
+  if (date.toDateString() === yesterday.toDateString()) return t("yesterday");
+  return date.toLocaleDateString(LANG, { day: "numeric", month: "short", year: date.getFullYear() === today.getFullYear() ? undefined : "numeric" });
 }
+
+const fullDate = (seconds) => new Date(seconds * 1000).toLocaleString(LANG, { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 // Children written as `condition && node` leave false/undefined behind; drop them.
 const present = (...nodes) => nodes.flat().filter((n) => n != null && n !== false);
@@ -76,18 +77,21 @@ function el(tag, props = {}, ...children) {
   return node;
 }
 
-let errorTimer;
-function showError(message) {
-  $("error").textContent = String(message);
-  $("error").hidden = false;
-  clearTimeout(errorTimer);
-  errorTimer = setTimeout(() => ($("error").hidden = true), 6000);
+let toastTimer;
+function toast(message, kind = "info") {
+  $("toast-text").textContent = String(message);
+  $("toast").className = `toast ${kind}`;
+  $("toast").setAttribute("role", kind === "error" ? "alert" : "status");
+  $("toast").hidden = false;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => ($("toast").hidden = true), kind === "error" ? 8000 : 2500);
 }
+const showError = (error) => toast(error, "error");
 
 async function act(command, args) {
   try {
     const result = await invoke(command, args);
-    $("error").hidden = true;
+    if (!$("toast").classList.contains("info")) $("toast").hidden = true;
     await reload();
     return result;
   } catch (error) {
@@ -98,14 +102,26 @@ async function act(command, args) {
 
 // MARK: - Data
 
+let loading = null;
 async function reload() {
-  try {
-    state.data = await invoke("load");
-  } catch (error) {
-    showError(error);
-    return;
-  }
-  render();
+  // Coalesce: events during a load trigger one more load, never several in parallel.
+  if (loading) { loading.again = true; return loading.promise; }
+  loading = { again: false };
+  loading.promise = (async () => {
+    do {
+      loading.again = false;
+      try {
+        state.data = await invoke("load");
+        state.loaded = true;
+        state.error = null;
+      } catch (error) {
+        state.error = String(error);
+      }
+      render();
+    } while (loading.again);
+    loading = null;
+  })();
+  return loading.promise;
 }
 
 function visibleNotes() {
@@ -129,13 +145,20 @@ function show(view) {
   state.view = view;
   for (const name of ["list", "detail", "new", "settings"]) $(`${name}-view`).hidden = name !== view;
   $("back").hidden = view === "list";
-  if (view === "list") state.openId = null;
+  if (view === "list") {
+    const last = state.openId && document.querySelector(`.note[data-id="${CSS.escape(state.openId)}"]`);
+    state.openId = null;
+    (last || $("search")).focus();
+  } else {
+    $("back").focus();
+  }
 }
 
 function render() {
   const unread = state.data.notes.filter((n) => n.meta.status === "unread").length;
   $("unread").hidden = unread === 0;
   $("unread").textContent = unread;
+  $("unread").setAttribute("aria-label", `${unread} ${t("unread").toLowerCase()}`);
   renderFolders();
   renderList();
   if (state.view === "detail") {
@@ -147,69 +170,82 @@ function render() {
 function renderFolders() {
   const chip = (name, label) => el("button", {
     class: state.folder === name ? "on" : null,
+    "aria-pressed": String(state.folder === name),
     onclick: () => { state.folder = name; render(); },
   }, label);
   $("folders").replaceChildren(
-    chip(null, "Todas"),
-    ...state.data.folders.map((f) => chip(f.name, f.unread ? `${f.title} · ${f.unread}` : f.title)),
+    chip(null, t("all")),
+    ...state.data.folders.map((f) => chip(f.name, f.unread ? `${folderTitle(f)} · ${f.unread}` : folderTitle(f))),
   );
-  for (const button of $("filters").children) button.classList.toggle("on", button.dataset.filter === state.filter);
+  for (const button of $("filters").children) {
+    const on = button.dataset.filter === state.filter;
+    button.classList.toggle("on", on);
+    button.setAttribute("aria-pressed", String(on));
+  }
 }
 
 function renderList() {
   const notes = visibleNotes();
   $("notes").replaceChildren(...notes.map(row));
-  $("empty").hidden = notes.length > 0;
-  $("empty").textContent = state.data.notes.length
-    ? "Nada por aquí con estos filtros."
-    : "Todavía no hay notas. Pide a tu agente “guarda en cots” o crea una con ＋.";
+  const failed = state.error && !state.loaded;
+  $("empty").hidden = notes.length > 0 && !failed;
+  $("empty-text").textContent = failed
+    ? `${t("loadFailed")} ${state.error}`
+    : state.data.notes.length ? t("noMatches") : state.loaded ? t("noNotes") : "";
+  $("retry").hidden = !failed;
 }
 
 function row(note) {
   const review = reviewOf(note);
   const topic = note.meta.topic;
-  const dot = color(note.meta.display?.color) || (topic ? topicColor(topic) : "var(--line)");
-  return el("li", {
-    class: `note${note.meta.status === "unread" ? " unread" : ""}`,
-    tabindex: 0,
-    onclick: () => openNote(note.id),
-    onkeydown: (e) => { if (e.key === "Enter") openNote(note.id); },
-  },
-  el("span", { class: "dot", style: `background:${dot}` }),
-  el("span", { class: "title" }, note.meta.display?.pinned ? "📌 " : "", note.title),
-  el("span", { class: "date" }, relative(note.date)),
-  el("span", { class: "sub" },
-    topic && el("span", { class: "topic", style: `color:${topicColor(topic)}` }, topic),
-    review && el("span", { class: REVIEW[review]?.[1] }, REVIEW[review]?.[0] || review),
-    note.tasks > 0 && el("span", { class: "tag" }, `${note.tasks} pendiente${note.tasks === 1 ? "" : "s"}`),
-    note.meta.summary && el("span", { class: "summary" }, note.meta.summary)));
+  const bar = color(note.meta.display?.color) || (topic ? topicColor(topic) : "var(--line)");
+  const unread = note.meta.status === "unread";
+  return el("li", {},
+    el("button", { class: `note${unread ? " unread" : ""}`, "data-id": note.id, style: `--bar:${bar}`, onclick: () => openNote(note.id) },
+      el("span", { class: "title" }, note.meta.display?.pinned && el("span", { class: "pin", title: t("pinned") }, "📌 "), note.title),
+      el("span", { class: "date" }, relative(note.date)),
+      unread && el("span", { class: "unread-dot", role: "img", "aria-label": t("unreadDot") }),
+      el("span", { class: "sub" },
+        topic && el("span", { class: "topic", style: `color:${topicColor(topic, true)}` }, topic),
+        review && el("span", { class: REVIEW_CLASS[review] }, t(review) || review),
+        note.tasks > 0 && el("span", { class: "tag" }, note.tasks === 1 ? t("tasksOne") : t("tasksMany", note.tasks)),
+        note.meta.summary && el("span", { class: "summary" }, note.meta.summary))));
 }
 
 async function openNote(id) {
   const note = state.data.notes.find((n) => n.id === id);
   if (!note) return;
   state.openId = id;
+  state.shown = null;
   show("detail");
   await renderDetail(note);
   $("detail-view").scrollTop = 0;
   if (note.meta.status === "unread") act("set_status", { id, status: "read" }).catch(() => {});
 }
 
+let renderGeneration = 0;
 async function renderDetail(note) {
+  // A reload while the note is open repaints it only if it changed, so a comment being
+  // typed and the scroll position survive agents writing elsewhere.
+  const signature = JSON.stringify([note.body, note.meta]);
+  if (state.shown === signature) return;
+  const generation = ++renderGeneration;
   const html = await invoke("render", { markdown: note.body });
+  if (generation !== renderGeneration) return; // A newer render started meanwhile.
+  const typed = document.querySelector(".review textarea")?.value || "";
+  state.shown = signature;
+
   const status = note.meta.status || "read";
   const review = reviewOf(note);
   const body = el("div", { class: "body" });
   body.innerHTML = html; // Raw HTML in notes is escaped on the Rust side.
 
-  // Ticking a box marks that task done in the file. Open boxes map, in order, to the
-  // note's open tasks; ticked ones stay as they are.
-  [...body.querySelectorAll("input[type=checkbox]:not(:checked)")].forEach((box) => {
-    box.disabled = false;
+  // Each open box carries its source line; ticking marks exactly that task.
+  body.querySelectorAll("input[type=checkbox][data-line]:not([checked])").forEach((box) => {
+    box.setAttribute("aria-label", box.parentElement.textContent.trim());
     box.addEventListener("click", (e) => {
       e.preventDefault();
-      const task = box.parentElement.textContent.trim();
-      act("check", { id: note.id, task }).catch(() => {});
+      act("check", { id: note.id, line: Number(box.dataset.line) }).catch(() => {});
     });
   });
   body.querySelectorAll("a[href]").forEach((a) => a.addEventListener("click", (e) => {
@@ -217,70 +253,88 @@ async function renderDetail(note) {
     invoke("open_url", { url: a.getAttribute("href") }).catch(showError);
   }));
 
+  const actionLabel = { copy: "actionCopy", open_url: "actionOpenURL", open_file: "actionOpenFile", reveal: "actionReveal" };
   const actions = (note.meta.actions || []).map((action) => el("button", {
     onclick: () => runAction(action),
-  }, action.label || { copy: "Copiar", open_url: "Abrir enlace", open_file: "Abrir archivo", reveal: "Mostrar en carpeta" }[action.type] || action.type));
+  }, action.label || (actionLabel[action.type] ? t(actionLabel[action.type]) : action.type)));
+  const pinned = note.meta.display?.pinned;
 
   $("detail").replaceChildren(...present(
-    el("h2", {}, note.title),
+    el("h2", { tabindex: -1 }, note.title),
     el("div", { class: "meta" },
-      el("span", {}, relative(note.date)),
-      note.meta.topic && el("span", { class: "topic", style: `color:${topicColor(note.meta.topic)}` }, note.meta.topic),
-      note.meta.source && el("span", {}, `por ${note.meta.source}`),
-      review && el("span", { class: REVIEW[review][1] }, REVIEW[review][0]),
-      ...(note.meta.tags || []).map((t) => el("span", { class: "tag" }, `#${t}`))),
+      el("time", { datetime: new Date(note.date * 1000).toISOString() }, fullDate(note.date)),
+      note.meta.topic && el("span", { class: "topic", style: `color:${topicColor(note.meta.topic, true)}` }, note.meta.topic),
+      note.meta.source && el("span", {}, note.meta.source === "user" ? t("byYou") : t("by", note.meta.source)),
+      review && el("span", { class: REVIEW_CLASS[review] }, t(review)),
+      ...(note.meta.tags || []).map((tag) => el("span", { class: "tag" }, `#${tag}`))),
     note.meta.summary && el("p", { class: "lead" }, note.meta.summary),
-    review && reviewBox(note, review),
     actions.length > 0 && el("div", { class: "row" }, actions),
     body,
-    note.meta.ai && el("details", { class: "ai" }, el("summary", {}, "Contexto para IAs"),
+    note.meta.ai && el("details", { class: "ai" }, el("summary", {}, t("aiContext")),
       el("pre", {}, JSON.stringify(note.meta.ai, null, 2))),
     el("div", { class: "row" },
       el("button", { onclick: () => act("set_status", { id: note.id, status: status === "unread" ? "read" : "unread" }) },
-        status === "unread" ? "Marcar como leída" : "Marcar como no leída"),
-      el("button", { onclick: () => act("set_pinned", { id: note.id, pinned: !note.meta.display?.pinned }) },
-        note.meta.display?.pinned ? "Desfijar" : "Fijar"),
+        status === "unread" ? t("markRead") : t("markUnread")),
+      el("button", { onclick: () => act("set_pinned", { id: note.id, pinned: !pinned }) }, pinned ? t("unpin") : t("pin")),
       el("button", { onclick: () => act("set_status", { id: note.id, status: status === "archived" ? "read" : "archived" }) },
-        status === "archived" ? "Desarchivar" : "Archivar"),
-      el("button", { onclick: () => navigator.clipboard.writeText(note.id) }, "Copiar id para IAs"),
-      el("button", { onclick: () => invoke("reveal", { path: note.path }).catch(showError) }, "Mostrar en carpeta"),
-      el("button", { class: "reject", onclick: async () => { await act("trash", { id: note.id }); show("list"); } }, "Papelera")),
+        status === "archived" ? t("unarchive") : t("archive")),
+      el("button", { onclick: () => navigator.clipboard.writeText(note.id).then(() => toast(t("copied"))) }, t("copyId")),
+      el("button", { onclick: () => invoke("reveal", { path: note.path }).catch(showError) }, t("reveal"))),
+    el("div", { class: "row danger-row" },
+      el("button", { class: "reject", onclick: () => trashNote(note) }, t("trash"))),
+    // Like the Mac app: decide after reading, with the decision bar pinned at the bottom.
+    review && reviewBox(note, review, typed),
   ));
 }
 
-function reviewBox(note, review) {
-  const comment = el("textarea", { placeholder: "Comentario para el agente (opcional; obligatorio para pedir cambios)" });
+async function trashNote(note) {
+  if (!window.confirm(t("trashConfirm", note.title))) return;
+  try {
+    await invoke("trash", { path: note.path });
+    show("list");
+    await reload();
+  } catch (error) {
+    showError(error);
+  }
+}
+
+function reviewBox(note, review, typed) {
+  const decided = review !== "pending";
+  if (decided) {
+    return el("div", { class: "review" },
+      note.meta.review?.comment && el("p", {}, el("strong", {}, `${t("comment")} `), note.meta.review.comment),
+      el("div", { class: "row end" }, el("button", { onclick: () => act("review", { id: note.id, status: "pending" }) }, t("reopen"))));
+  }
+  const comment = el("textarea", { placeholder: t("commentPlaceholder"), "aria-label": t("commentPlaceholder") });
+  comment.value = typed;
   const decide = (status) => {
-    if (status === "changes" && !comment.value.trim()) { comment.focus(); return showError("Escribe qué cambiar."); }
+    if (status === "changes" && !comment.value.trim()) { comment.focus(); return showError(t("commentNeeded")); }
     act("review", { id: note.id, status, comment: comment.value }).catch(() => {});
   };
-  const decided = review !== "pending";
-  return el("div", { class: "review" },
-    decided && note.meta.review?.comment && el("div", {}, el("strong", {}, "Comentario: "), note.meta.review.comment),
-    decided
-      ? el("div", { class: "row" }, el("button", { onclick: () => act("review", { id: note.id, status: "pending" }) }, "Volver a pendiente"))
-      : [comment, el("div", { class: "row" },
-          el("button", { class: "approve", onclick: () => decide("approved") }, "Aprobar"),
-          el("button", { class: "changes", onclick: () => decide("changes") }, "Pedir cambios"),
-          el("button", { class: "reject", onclick: () => decide("rejected") }, "Rechazar"))]);
+  return el("div", { class: "review" }, comment,
+    el("div", { class: "row" },
+      el("button", { class: "reject", onclick: () => decide("rejected") }, t("reject")),
+      el("button", { class: "changes", onclick: () => decide("changes") }, t("requestChanges")),
+      el("span", { class: "spacer" }),
+      el("button", { class: "approve", onclick: () => decide("approved") }, t("approve"))));
 }
 
 function runAction(action) {
   switch (action.type) {
-    case "copy": return navigator.clipboard.writeText(action.text || action.url || action.path || "");
+    case "copy": return navigator.clipboard.writeText(action.text || action.url || action.path || "").then(() => toast(t("copied")));
     case "open_url": return invoke("open_url", { url: action.url }).catch(showError);
     case "open_file": return invoke("open_path", { path: action.path }).catch(showError);
     case "reveal": return invoke("reveal", { path: action.path }).catch(showError);
-    case "run": return navigator.clipboard.writeText(action.command || "").then(() => showError("Comando copiado: pégalo en tu terminal."));
-    default: return showError(`Acción desconocida: ${action.type}`);
+    case "run": return navigator.clipboard.writeText(action.command || "").then(() => toast(t("commandCopied")));
+    default: return showError(t("unknownAction", action.type));
   }
 }
 
 // MARK: - New note
 
 function newNote() {
-  const folders = state.data.folders.length ? state.data.folders : [{ name: "code-notes", title: "code-notes" }];
-  $("new-folder").replaceChildren(...folders.map((f) => el("option", { value: f.name, selected: f.name === (state.folder || "code-notes") }, f.title)));
+  const folders = state.data.folders.length ? state.data.folders : [{ name: "code-notes", title: "Code notes" }];
+  $("new-folder").replaceChildren(...folders.map((f) => el("option", { value: f.name, selected: f.name === (state.folder || "code-notes") }, folderTitle(f))));
   $("new-title").value = "";
   $("new-body").value = "";
   show("new");
@@ -293,41 +347,68 @@ $("new-form").addEventListener("submit", async (e) => {
   if (id) openNote(id);
 });
 
+// Leaving a form with text typed asks first.
+function canLeave() {
+  if (state.view === "new" && ($("new-title").value.trim() || $("new-body").value.trim())) return window.confirm(t("discardNote"));
+  const comment = document.querySelector(".review textarea");
+  if (state.view === "detail" && comment?.value.trim()) return window.confirm(t("discardComment"));
+  return true;
+}
+
+function goBack() {
+  if (!canLeave()) return;
+  show("list");
+  render();
+}
+
 // MARK: - Settings
 
 async function openSettings() {
+  if (!canLeave()) return;
   show("settings");
   renderSettings(await invoke("settings"));
 }
 
 function renderSettings(s) {
-  const autostart = el("input", { type: "checkbox", checked: s.autostart, onchange: (e) => invoke("set_autostart", { on: e.target.checked }).catch(showError) });
+  const status = (ok, okText = t("installed"), noText = t("notInstalled")) =>
+    el("span", { class: ok ? "ok" : "no" }, ok ? `✓ ${okText}` : noText);
   $("settings").replaceChildren(...present(
-    el("div", { class: "setting" }, el("div", {}, "Abrir al iniciar sesión"), autostart),
+    el("label", { class: "setting" }, el("span", {}, t("startAtLogin")),
+      el("input", { type: "checkbox", checked: s.autostart, onchange: (e) => invoke("set_autostart", { on: e.target.checked }).catch(showError) })),
     el("div", { class: "setting" },
-      el("div", {}, "Carpeta de notas", el("small", {}, s.root)),
-      el("button", { onclick: () => invoke("open_path", { path: s.root }).catch(showError) }, "Abrir")),
-    el("h3", {}, "Para tus agentes"),
+      el("div", {}, t("notesFolder"), el("small", {}, s.root)),
+      el("button", { onclick: () => invoke("open_path", { path: s.root }).catch(showError) }, t("open"))),
+    el("h3", {}, t("forAgents")),
+    el("div", { class: "setting" },
+      el("div", {}, "CLI ", el("code", {}, "cots"), el("small", {}, t("cliHelp"))),
+      status(s.cli, t("installed"), t("notFound"))),
     ...(s.integrations || []).map((i) => el("div", { class: "setting" },
       el("div", {}, i.title, i.location && el("small", {}, i.location)),
-      el("span", { class: i.installed ? "ok" : "no" }, i.installed ? "✓ Instalado" : "No instalado"))),
-    el("div", { class: "setting" },
-      el("div", {}, "CLI ", el("code", {}, "cots"), el("small", {}, "En el PATH de tu usuario; abre una terminal nueva para usarlo.")),
-      el("span", { class: "ok" }, "✓")),
+      status(i.installed))),
     ...(s.errors || []).map((e) => el("p", { class: "status-rejected" }, e)),
     el("div", { class: "row end" },
-      el("button", { onclick: async () => renderSettings(await invoke("reinstall")) }, "Reinstalar integraciones")),
+      el("button", { onclick: async () => renderSettings(await invoke("reinstall")) }, t("reinstall"))),
     el("small", { class: "no" }, `coTs ${s.version}`),
   ));
 }
 
 // MARK: - Wiring
 
-$("back").addEventListener("click", () => { show("list"); render(); });
-$("new").addEventListener("click", newNote);
-$("new-cancel").addEventListener("click", () => show("list"));
+document.documentElement.lang = LANG;
+document.querySelectorAll("[data-label]").forEach((b) => { b.setAttribute("aria-label", t(b.dataset.label)); b.title = t(b.dataset.label); });
+document.querySelectorAll("[data-text]").forEach((n) => (n.textContent = t(n.dataset.text)));
+for (const button of $("filters").children) button.textContent = t({ unread: "unread", pending: "toReview", archived: "archived" }[button.dataset.filter]);
+$("search").placeholder = t("search");
+$("search").setAttribute("aria-label", t("search"));
+$("retry").textContent = t("retry");
+
+$("back").addEventListener("click", goBack);
+$("new").addEventListener("click", () => { if (canLeave()) newNote(); });
+$("new-cancel").addEventListener("click", goBack);
 $("open-settings").addEventListener("click", openSettings);
 $("close").addEventListener("click", () => invoke("hide"));
+$("retry").addEventListener("click", reload);
+$("toast-close").addEventListener("click", () => ($("toast").hidden = true));
 $("search").addEventListener("input", (e) => { state.query = e.target.value; renderList(); });
 $("filters").addEventListener("click", (e) => {
   const filter = e.target.dataset?.filter;
@@ -335,20 +416,31 @@ $("filters").addEventListener("click", (e) => {
   state.filter = state.filter === filter ? null : filter;
   render();
 });
+// Arrow keys move between notes.
+$("notes").addEventListener("keydown", (e) => {
+  if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+  const rows = [...$("notes").querySelectorAll(".note")];
+  const i = rows.indexOf(document.activeElement);
+  const next = rows[i + (e.key === "ArrowDown" ? 1 : -1)];
+  if (next) { e.preventDefault(); next.focus(); }
+});
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
-    if (state.view !== "list") { show("list"); render(); } else invoke("hide");
+    if (state.view !== "list") goBack(); else invoke("hide");
   } else if (e.ctrlKey && e.key.toLowerCase() === "n") {
     e.preventDefault();
-    newNote();
+    if (canLeave()) newNote();
   } else if (e.ctrlKey && e.key.toLowerCase() === "f") {
     e.preventDefault();
+    if (state.view !== "list" && !canLeave()) return;
     show("list");
     $("search").focus();
   }
 });
+dark.addEventListener("change", render);
 
+invoke("set_language", { lang: LANG }).catch(() => {});
 listen("notes-changed", reload);
-listen("new-note", newNote);
+listen("new-note", () => { if (canLeave()) newNote(); });
 listen("open-settings", openSettings);
 reload();

@@ -37,6 +37,9 @@ final class IntegrationTests: XCTestCase {
     }
 
     func testCLILinkFallsBackAndNeverClobbers() throws {
+        #if os(Windows)
+        throw XCTSkip("The CLI link is a macOS integration; the Windows installer puts cots on the PATH")
+        #endif
         // The preferred folder doesn't exist and isn't under home, so it's skipped.
         let cli = CLIIntegration(env: env)
         XCTAssertFalse(cli.isInstalled)
