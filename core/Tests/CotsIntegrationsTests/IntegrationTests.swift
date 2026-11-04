@@ -94,6 +94,12 @@ final class IntegrationTests: XCTestCase {
         XCTAssertEqual(settings["model"] as? String, "opus")
     }
 
+    #if os(Windows)
+    let isWindows = true
+    #else
+    let isWindows = false
+    #endif
+
     /// Where Claude Desktop keeps its config on this platform, relative to the home.
     let desktopConfig = "\(ClaudeDesktopIntegration.supportFolder)/Claude/claude_desktop_config.json"
 
@@ -126,7 +132,9 @@ final class IntegrationTests: XCTestCase {
 
     func testLaunchSetupInstallsOnceThenOnlyRefreshes() throws {
         XCTAssertEqual(Integrations.setUp(Integrations.all(env), firstLaunch: true), [])
-        XCTAssertTrue(CLIIntegration(env: env).isInstalled)
+        // The CLI link is a symlink, macOS only (the Windows installer uses the PATH).
+        let linksCLI = !isWindows
+        XCTAssertEqual(CLIIntegration(env: env).isInstalled, linksCLI)
         XCTAssertTrue(SkillIntegration(env: env).isInstalled)
         XCTAssertTrue(ClaudeCodeHooksIntegration(env: env).isInstalled)
 
@@ -134,7 +142,7 @@ final class IntegrationTests: XCTestCase {
         SkillIntegration(env: env).remove()
         _ = Integrations.setUp(Integrations.all(env), firstLaunch: false)
         XCTAssertFalse(SkillIntegration(env: env).isInstalled)
-        XCTAssertTrue(CLIIntegration(env: env).isInstalled)
+        XCTAssertEqual(CLIIntegration(env: env).isInstalled, linksCLI)
 
         Integrations.removeAll(env)
         XCTAssertFalse(Integrations.all(env).contains { $0.isInstalled })
