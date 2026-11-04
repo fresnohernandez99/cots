@@ -6,7 +6,6 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "cots", targets: ["cots"]),
-        .executable(name: "CotsApp", targets: ["CotsApp"]),
         .library(name: "CotsCore", targets: ["CotsCore"]),
     ],
     dependencies: [
@@ -23,11 +22,17 @@ let package = Package(
             path: "cli"
         ),
         .target(name: "CotsIntegrations", dependencies: ["CotsCore"], path: "core/CotsIntegrations"),
-        // The macOS menu bar app. The Windows app lives in apps/windows (Tauri) and only
-        // shares the notes format and the `cots` CLI.
-        .executableTarget(name: "CotsApp", dependencies: ["CotsCore", "CotsIntegrations"], path: "apps/macos/Sources"),
         .testTarget(name: "CotsCoreTests", dependencies: ["CotsCore"], path: "core/Tests/CotsCoreTests"),
         .testTarget(name: "CotsIntegrationsTests", dependencies: ["CotsIntegrations"], path: "core/Tests/CotsIntegrationsTests"),
     ],
     swiftLanguageModes: [.v6]
 )
+
+// The macOS menu bar app (AppKit, SwiftUI) only exists on macOS. The Windows app lives in
+// apps/windows (Tauri) and shares the notes format and the `cots` CLI.
+#if os(macOS)
+package.products.append(.executable(name: "CotsApp", targets: ["CotsApp"]))
+package.targets.append(
+    .executableTarget(name: "CotsApp", dependencies: ["CotsCore", "CotsIntegrations"], path: "apps/macos/Sources")
+)
+#endif
