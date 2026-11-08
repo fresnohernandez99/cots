@@ -127,13 +127,20 @@ public final class MCPServer {
             return "Añadido a \(try store.append(try string(a, "id"), text: try string(a, "text")).id)"
 
         case "create_plan":
-            var draft = NoteDraft.plan(title: try string(a, "title"), body: try string(a, "body"))
-            draft.summary = a["summary"] as? String
-            draft.topic = a["topic"] as? String
-            draft.source = clientName
-            let note = try store.create(draft)
+            let note: Note
+            let replace = nonEmpty(a["replace"])
+            if let replace {
+                note = try store.revisePlan(replace, title: nonEmpty(a["title"]), summary: a["summary"] as? String,
+                                            body: try string(a, "body"))
+            } else {
+                var draft = NoteDraft.plan(title: try string(a, "title"), body: try string(a, "body"))
+                draft.summary = a["summary"] as? String
+                draft.topic = a["topic"] as? String
+                draft.source = clientName
+                note = try store.create(draft)
+            }
             return """
-            Plan creado: \(note.id).
+            Plan \(replace == nil ? "creado" : "actualizado"): \(note.id).
             Pide al usuario que lo revise en coTs (Aprobar / Pedir cambios / Rechazar) y que te avise. \
             Después llama a get_plan_review con este id.
             """
@@ -149,6 +156,9 @@ public final class MCPServer {
                     var out = "review: \(status.rawValue)\n"
                     if let c = note.meta.review?.comment, !c.isEmpty { out += "comment: \(c)\n" }
                     if status == .pending { return out + "El usuario aún no ha decidido." }
+                    if status == .changes {
+                        out += "Corrige este mismo plan: create_plan con replace=\"\(id)\" (no crees otro).\n"
+                    }
                     return out + "\n# \(note.title)\n\n" + note.body.trimmingCharacters(in: .newlines)
                 }
                 Thread.sleep(forTimeInterval: 1)
@@ -185,7 +195,7 @@ public final class MCPServer {
     hacer un plan "en cots", o revisar sus notas. Guarda con save_note (carpeta por defecto code-notes; \
     title corto, summary de una línea, el body en Markdown). Para planes: create_plan, pide al usuario que \
     lo revise en coTs y, cuando avise, get_plan_review; sigue la versión del plan que devuelve, porque \
-    puede haberlo editado. Para leer, empieza por list_notes (sin bodies) y abre solo lo necesario con read_note.
+    puede haberlo editado. Si pide cambios, corrige ese mismo plan con create_plan y replace=<id>, nunca crees otro. Para leer, empieza por list_notes (sin bodies) y abre solo lo necesario con read_note.
     """
 
     static var tools: [[String: Any]] { [
@@ -224,12 +234,13 @@ public final class MCPServer {
             "id": prop("string", "Id de la nota."),
             "text": prop("string", "Texto Markdown."),
         ], required: ["id", "text"]),
-        tool("create_plan", "Crea un plan para que el usuario lo apruebe, pida cambios o lo rechace en coTs.", [
+        tool("create_plan", "Crea un plan para que el usuario lo apruebe, pida cambios o lo rechace en coTs. Si pidió cambios, pasa replace con el id del plan: se corrige ese mismo plan, nunca se crea otro.", [
             "title": prop("string", "Título, p. ej. 'Plan: migrar a Postgres 17'."),
             "body": prop("string", "Plan en Markdown: objetivo, pasos (- [ ]), riesgos."),
             "summary": prop("string", "Una línea."),
             "topic": prop("string", "Proyecto."),
-        ], required: ["title", "body"]),
+            "replace": prop("string", "Id del plan al que el usuario pidió cambios; lo sustituye (mismo id)."),
+        ], required: ["body"]),
         tool("get_plan_review", "Devuelve la decisión del usuario sobre un plan (approved / changes / rejected / pending), su comentario y el plan tal como quedó.", [
             "id": prop("string", "Id del plan."),
             "wait_seconds": prop("number", "Esperar hasta N segundos (máx. 50) a que decida."),

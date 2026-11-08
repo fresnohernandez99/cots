@@ -8,18 +8,20 @@ struct MenuContentView: View {
     @Environment(Browser.self) private var browser
     @Environment(\.openWindow) private var openWindow
     @Environment(\.openSettings) private var openSettings
-    @State private var openNote: String?
     @State private var creating = false
+    /// Bumped each time the popover opens: SwiftUI can leave a hidden MenuBarExtra window's
+    /// list stale, so it shows notes saved while closed only after rebuilding it.
+    @State private var shown = 0
 
     var body: some View {
         @Bindable var browser = browser
         VStack(spacing: 0) {
-            if let openNote {
-                NoteDetailView(noteID: openNote) { self.openNote = nil }
+            if let openNote = browser.popoverSelection {
+                NoteDetailView(noteID: openNote) { browser.popoverSelection = nil }
             } else if creating {
                 NewNoteView(initialFolder: browser.selectedFolder) { created in
                     creating = false
-                    openNote = created?.id
+                    browser.popoverSelection = created?.id
                 }
             } else {
                 HStack(spacing: 6) {
@@ -45,7 +47,7 @@ struct MenuContentView: View {
                 .padding(10)
                 FilterChips()
                 if let pending = store.pendingSessions.first {
-                    Button { openNote = pending.id } label: {
+                    Button { browser.popoverSelection = pending.id } label: {
                         HStack(spacing: 8) {
                             Image(systemName: "clock.arrow.circlepath").foregroundStyle(.orange)
                             VStack(alignment: .leading, spacing: 1) {
@@ -64,16 +66,46 @@ struct MenuContentView: View {
                     .padding(.bottom, 8)
                 }
                 Divider()
-                NoteList(selection: Binding(get: { openNote }, set: { openNote = $0 }), showFolder: browser.selectedFolder == nil)
+                NoteList(selection: $browser.popoverSelection, showFolder: browser.selectedFolder == nil)
+                    .id(shown)
             }
             if let error = store.lastError {
                 ErrorBanner(message: error) { store.lastError = nil }
             }
         }
         .frame(width: 400, height: 560)
+        .background(WindowDidBecomeKey {
+            shown += 1
+            store.reload()
+        })
         // Backup registration in case the status label's task hasn't run yet.
         .onAppear {
             StatusMenu.shared.install(store: store, browser: browser, openWindow: { openWindow(id: "main") }, openSettings: { openSettings() })
+        }
+    }
+}
+
+/// Runs `action` each time the hosting window becomes key, i.e. each time the popover opens;
+/// `onAppear` only fires the first time for a MenuBarExtra window.
+private struct WindowDidBecomeKey: NSViewRepresentable {
+    let action: () -> Void
+
+    func makeNSView(context: Context) -> Probe { Probe() }
+    func updateNSView(_ view: Probe, context: Context) { view.action = action }
+
+    final class Probe: NSView {
+        var action: (() -> Void)?
+        private var token: NSObjectProtocol?
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            if let token { NotificationCenter.default.removeObserver(token) }
+            token = window.map {
+                NotificationCenter.default.addObserver(forName: NSWindow.didBecomeKeyNotification, object: $0,
+                                                       queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated { self?.action?() }
+                }
+            }
         }
     }
 }

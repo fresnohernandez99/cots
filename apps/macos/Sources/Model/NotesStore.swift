@@ -188,6 +188,7 @@ final class NotesStore {
         perform {
             try disk.trash(note.id)
             notes.removeAll { $0.id == note.id }
+            sessionNotes.removeAll { $0.id == note.id }
             return nil
         }
     }

@@ -24,6 +24,7 @@ struct ColorMenuItems: View {
 /// Everything you can do to a note; used as the row context menu and the detail "More" menu.
 struct NoteMenuItems: View {
     @Environment(NotesStore.self) private var store
+    @Environment(Browser.self) private var browser
     let note: Note
 
     var body: some View {
@@ -45,7 +46,10 @@ struct NoteMenuItems: View {
         } else {
             Button("Archivar") { store.setStatus(note, .archived) }
         }
-        Button("Mover a la papelera", role: .destructive) { store.trash(note) }
+        Button("Mover a la papelera", role: .destructive) {
+            browser.close(note.id, in: store)
+            store.trash(note)
+        }
     }
 }
 

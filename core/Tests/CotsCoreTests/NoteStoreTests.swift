@@ -99,6 +99,21 @@ final class NoteStoreTests: XCTestCase {
         XCTAssertEqual(reviewed.meta.review?.resolvedStatus, .changes)
         XCTAssertEqual(reviewed.meta.review?.comment, "más tests")
         XCTAssertNotNil(reviewed.meta.review?.at)
+
+        // The agent's new version replaces the plan: same id, pending again, no second plan.
+        let revised = try store.revisePlan(plan.id, title: nil, summary: "v2", body: "- [ ] paso\n- [ ] más tests")
+        XCTAssertEqual(revised.id, plan.id)
+        XCTAssertEqual(revised.title, "Plan")
+        XCTAssertEqual(revised.meta.summary, "v2")
+        XCTAssertEqual(revised.meta.review?.resolvedStatus, .pending)
+        XCTAssertNil(revised.meta.review?.comment)
+        XCTAssertEqual(revised.meta.resolvedStatus, .unread)
+        XCTAssertTrue(revised.body.contains("más tests"))
+        XCTAssertEqual(try store.notes(in: "plans").count, 1)
+        var note = try Frontmatter.parse("title: Nota")
+        Frontmatter.set(Node("report"), at: ["display", "style"], in: &note)
+        let other = try store.create(folder: "code-notes", frontmatter: note, body: "x")
+        XCTAssertThrowsError(try store.revisePlan(other.id, title: nil, summary: nil, body: "y"))
     }
 
     func testSaveCommand() {
@@ -136,7 +151,9 @@ final class NoteStoreTests: XCTestCase {
         try Sessions.markNotified(a.id, in: store)
         XCTAssertTrue(Sessions.needingNotification(in: store).isEmpty)
         XCTAssertNil(try Sessions.takePending(topic: "repo", excluding: "C", in: store), "handed back only once")
+        XCTAssertTrue(Sessions.all(in: store).isEmpty, "the next session drops a note already handed back")
 
+        try Sessions.record(reply("A", "## Dejé el paso 3"), topic: "repo", in: store)
         Sessions.end(session: "A", reason: "logout", in: store)
         XCTAssertEqual(try store.note(id: a.id).meta.session?.reason, "logout")
         let reopened = try Sessions.record(reply("A", "nuevo"), topic: "repo", in: store)

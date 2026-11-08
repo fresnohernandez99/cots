@@ -35,6 +35,9 @@ struct Wait: ParsableCommand {
             if review != .pending {
                 print("review: \(review.rawValue)")
                 if let comment = note.meta.review?.comment, !comment.isEmpty { print("comment: \(comment)") }
+                if review == .changes {
+                    print("next: corrige este mismo plan con `cots plan --replace \(note.id)` y vuelve a esperar; no crees otro.")
+                }
                 print("id: \(note.id)\n\n# \(note.title)\n")
                 print(note.body.trimmingCharacters(in: .newlines))
                 return

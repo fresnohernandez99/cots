@@ -99,7 +99,10 @@ AI:  cots plan …  ──►  shows up in coTs › Plans (orange badge)
 AI:  cots wait <id> (in the background, 0 tokens)
 You: read, edit, comment → Approve / Request changes / Reject
 AI:  wakes up with  review: approved|changes|rejected + comment + final plan
+AI:  on changes, cots plan --replace <id>  ──►  same plan, new version, pending again
 ```
+
+Requesting changes never leaves two plans behind: the agent's revision replaces the plan in place, with the same id.
 
 Approved and rejected plans turn gray and move into the **Finished plans** subsection.
 
@@ -107,7 +110,7 @@ Approved and rejected plans turn gray and move into the **Finished plans** subse
 
 <p align="center"><img src="docs/screenshots/popover-session.png" width="300" alt="Note from an interrupted session"></p>
 
-1. While you work, the `Stop` hook saves each session's last reply to `~/coTs/_sessions/<project>--<session>.md`. It's a hidden note: it doesn't show up in lists.
+1. While you work, the `Stop` hook saves each session's last reply with detail to `~/coTs/_sessions/<project>--<session>.md`. Short wrap-ups ("done, 40 tests pass and it's in prod") are skipped: only replies with code, tables, headings or a long explanation count. It's a hidden note: it doesn't show up in lists.
 2. `SessionEnd` records whether the session closed normally. If it crashes or you shut down the Mac, that signal never arrives, and that's fine.
 3. When a new session starts in the same project, `SessionStart`:
    - tells coTs, which shows a **macOS notification** and an orange banner in the popover;
@@ -117,7 +120,7 @@ Approved and rejected plans turn gray and move into the **Finished plans** subse
    - **Save as note** keeps it in `code-notes`;
    - **Dismiss** clears the reminder.
 
-   All sessions remain under **Expanded window → System → Sessions**.
+   The note stays under **Expanded window → System → Sessions** until the new session's own last message replaces it. If the new session leaves none, it's removed when the next one starts. Each project keeps a single last message, not a pile.
 
 ### Claude Desktop and ChatGPT (MCP)
 
@@ -204,6 +207,7 @@ Unknown keys are always preserved. Each folder can have a `_folder.yml` with a t
 cots add <folder> --title … [--summary …] [--style …] [--color …] [--ai JSON] [--action 'type|label|value'] < body.md
 cots add code-notes --from-last-reply        # uses the last reply captured by the hook
 cots plan --title … < plan.md                 # creates a pending plan
+cots plan --replace <id> < plan.md            # revises that plan after you request changes
 cots wait <id> [--timeout s]                  # blocks until you decide
 cots review <id> approved|changes|rejected [--comment …]
 cots list [folder] [--here | --topic X] [--unread] [--json]

@@ -97,7 +97,10 @@ IA: cots plan …  ──►  aparece en coTs › Plans (badge naranja)
 IA: cots wait <id> (en segundo plano, 0 tokens)
 Tú: lees, editas, comentas → Aprobar / Pedir cambios / Rechazar
 IA: se despierta con  review: approved|changes|rejected + comentario + plan final
+IA: si pides cambios, cots plan --replace <id>  ──►  el mismo plan, nueva versión, otra vez por revisar
 ```
+
+Pedir cambios nunca deja dos planes: la revisión de la IA sustituye al plan en su sitio, con el mismo id.
 
 Los planes aprobados o rechazados pasan a gris, dentro de la subsección **Planes terminados**.
 
@@ -105,7 +108,7 @@ Los planes aprobados o rechazados pasan a gris, dentro de la subsección **Plane
 
 <p align="center"><img src="docs/screenshots/popover-session.png" width="300" alt="Nota de una sesión interrumpida"></p>
 
-1. Mientras trabajas, el hook `Stop` guarda la última respuesta de cada sesión en `~/coTs/_sessions/<proyecto>--<sesión>.md`. Es una nota oculta: no sale en las listas.
+1. Mientras trabajas, el hook `Stop` guarda la última respuesta con detalle de cada sesión en `~/coTs/_sessions/<proyecto>--<sesión>.md`. Los cierres breves («listo, pasan 40 tests y ya está en prod») no cuentan: solo las respuestas con código, tablas, títulos o una explicación larga. Es una nota oculta: no sale en las listas.
 2. `SessionEnd` anota si la sesión se cerró normalmente. Si se cuelga o apagas el Mac, ese aviso no llega, y no pasa nada.
 3. Al abrir una sesión nueva en el mismo proyecto, `SessionStart`:
    - avisa a coTs, que muestra una **notificación de macOS** y un aviso naranja en el popover;
@@ -115,7 +118,7 @@ Los planes aprobados o rechazados pasan a gris, dentro de la subsección **Plane
    - **Guardar como nota** la conserva en `code-notes`;
    - **Descartar** quita el aviso.
 
-   Todas las sesiones siguen en **Vista ampliada → Sistema → Sesiones**.
+   La nota sigue en **Vista ampliada → Sistema → Sesiones** hasta que la sustituye la de la sesión nueva, cuando esta deja su propio último mensaje. Si la sesión nueva no deja ninguno, se borra al abrir la siguiente. Así cada proyecto guarda un solo último mensaje, no un montón.
 
 ### Claude Desktop y ChatGPT (MCP)
 
@@ -202,6 +205,7 @@ Las claves desconocidas se conservan siempre. Cada carpeta puede tener un `_fold
 cots add <carpeta> --title … [--summary …] [--style …] [--color …] [--ai JSON] [--action 'tipo|etiqueta|valor'] < body.md
 cots add code-notes --from-last-reply        # usa la última respuesta capturada por el hook
 cots plan --title … < plan.md                 # crea un plan pendiente
+cots plan --replace <id> < plan.md            # corrige ese plan cuando pides cambios
 cots wait <id> [--timeout s]                  # bloquea hasta que decidas
 cots review <id> approved|changes|rejected [--comment …]
 cots list [carpeta] [--here | --topic X] [--unread] [--json]

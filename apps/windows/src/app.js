@@ -441,6 +441,8 @@ dark.addEventListener("change", render);
 
 invoke("set_language", { lang: LANG }).catch(() => {});
 listen("notes-changed", reload);
+// The tray window is hidden most of the time; reload when it comes back, in case a watcher event was missed.
+window.addEventListener("focus", () => reload());
 listen("new-note", () => { if (canLeave()) newNote(); });
 listen("open-settings", openSettings);
 reload();

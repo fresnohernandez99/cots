@@ -43,7 +43,12 @@ struct CotsCommands: Commands {
             }
             .keyboardShortcut("a", modifiers: [.command, .shift])
             .disabled(note == nil)
-            Button("Mover a la papelera") { if let note { store.trash(note) } }
+            Button("Mover a la papelera") {
+                if let note {
+                    browser.close(note.id, in: store)
+                    store.trash(note)
+                }
+            }
                 .keyboardShortcut(.delete, modifiers: .command)
                 .disabled(note == nil)
         }

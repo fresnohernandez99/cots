@@ -15,14 +15,16 @@ public struct ClaudeCodeHooks {
     }
 
     /// `Stop`: caches the final reply so saving it later costs nothing, and mirrors it
-    /// into the project's hidden session note so it survives a crash or shutdown.
+    /// into the project's hidden session note so it survives a crash or shutdown. Replies
+    /// without detail (see `Sessions.isWorthKeeping`) are only cached: the session note
+    /// keeps the last one that had some, or isn't created at all.
     public func stop(_ input: [String: Any]) throws {
         guard let session = input["session_id"] as? String,
               let text = input["last_assistant_message"] as? String, !text.isEmpty else { return }
         let cwd = input["cwd"] as? String
         let reply = CachedReply(agent: Self.agent, session: session, cwd: cwd, text: text)
         try replies.store(reply)
-        if let topic = cwd.flatMap(Topic.detect) {
+        if Sessions.isWorthKeeping(text), let topic = cwd.flatMap(Topic.detect) {
             try store.ensureRoot()
             try Sessions.record(reply, topic: topic, in: store)
         }

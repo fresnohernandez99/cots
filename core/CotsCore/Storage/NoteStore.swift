@@ -280,6 +280,23 @@ public final class NoteStore: @unchecked Sendable {
         }
     }
 
+    /// An agent's new version of a plan the user sent back: it takes the old one's place
+    /// (same id, so `cots wait` keeps working) instead of piling up a second plan. The
+    /// review starts over and the note shows as unread again.
+    @discardableResult
+    public func revisePlan(_ id: String, title: String?, summary: String?, body: String) throws -> Note {
+        guard try note(id: id).style == .plan else { throw CotsError.invalidArgument("\(id) no es un plan") }
+        return try mutate(id) { node, current in
+            if let title, !title.isEmpty { Frontmatter.set(Node(title), at: ["title"], in: &node) }
+            if let summary { Frontmatter.set(summary.isEmpty ? nil : Node(summary), at: ["summary"], in: &node) }
+            Frontmatter.set(.mapping(Node.Mapping([(Node("status"), Node(ReviewStatus.pending.rawValue))])),
+                            at: ["review"], in: &node)
+            Frontmatter.set(Node(NoteStatus.unread.rawValue), at: ["status"], in: &node)
+            Frontmatter.set(Node(Timestamp.now()), at: ["updated"], in: &node)
+            current = body
+        }
+    }
+
     /// nil removes the explicit color, falling back to the topic's / folder's.
     @discardableResult
     public func setColor(_ id: String, _ color: String?) throws -> Note {

@@ -63,6 +63,22 @@ final class AgentTests: XCTestCase {
         XCTAssertNil(hooks.replies.reply(session: "s2", agent: "claude-code"))
     }
 
+    func testRepliesWithoutDetailAreCachedButNotHandedOver() throws {
+        try hooks.stop(["session_id": "s1", "cwd": repo!, "last_assistant_message": "## Diseño\n\n| a | b |\n|---|---|"])
+        // A wrap-up line doesn't replace the detailed reply in the session note…
+        try hooks.stop(["session_id": "s1", "cwd": repo!, "last_assistant_message": "Listo: 40 tests pasan y 3 features ya están en prod."])
+        XCTAssertEqual(Sessions.all(in: store).first?.title, "Diseño")
+        // …but stays cached, so "guarda en cots" still saves it.
+        XCTAssertEqual(hooks.replies.reply(session: "s1", agent: "claude-code")?.text.hasPrefix("Listo"), true)
+        // A session that never said anything detailed leaves no note to hand over.
+        try hooks.stop(["session_id": "s2", "cwd": repo!, "last_assistant_message": "Hecho.\n\n- tests ok\n- desplegado"])
+        XCTAssertEqual(Sessions.all(in: store).count, 1)
+
+        XCTAssertTrue(Sessions.isWorthKeeping("Así queda:\n\n```swift\nlet x = 1\n```"))
+        XCTAssertTrue(Sessions.isWorthKeeping(String(repeating: "Explicación larga. ", count: 100)))
+        XCTAssertFalse(Sessions.isWorthKeeping("Terminé la revisión de QA; corregí lo grave."))
+    }
+
     func testPromptSavesLastReplyWithoutReachingTheModel() throws {
         try hooks.stop(["session_id": "s1", "cwd": repo!, "last_assistant_message": "# Informe final\n\ntodo listo"])
         XCTAssertNil(hooks.prompt(["session_id": "s1", "cwd": repo!, "prompt": "guarda un resumen en cots"]))
@@ -81,7 +97,7 @@ final class AgentTests: XCTestCase {
     }
 
     func testNewSessionGetsThePreviousOneOnce() throws {
-        try hooks.stop(["session_id": "old", "cwd": repo!, "last_assistant_message": "a medias"])
+        try hooks.stop(["session_id": "old", "cwd": repo!, "last_assistant_message": "## A medias\n\nFalta el paso 3"])
         hooks.sessionEnd(["session_id": "old", "reason": "exit"])
         XCTAssertNotNil(Sessions.all(in: store).first?.meta.session?.ended)
         // Resumed sessions carry their own context.
@@ -92,6 +108,25 @@ final class AgentTests: XCTestCase {
         XCTAssertTrue(context?.contains("se cerró") == true, context ?? "")
         XCTAssertEqual(Sessions.needingNotification(in: store).count, 1)
         XCTAssertNil(hooks.sessionStart(["session_id": "newer", "cwd": repo!]))
+    }
+
+    func testHandedOverNoteIsReplacedByTheNextOne() throws {
+        try hooks.stop(["session_id": "old", "cwd": repo!, "last_assistant_message": "## A medias\n\nFalta el paso 3"])
+        _ = hooks.sessionStart(["session_id": "new", "cwd": repo!])
+        // A reply without detail doesn't replace it yet.
+        try hooks.stop(["session_id": "new", "cwd": repo!, "last_assistant_message": "listo"])
+        XCTAssertEqual(Sessions.all(in: store).map { $0.meta.session?.id }, ["old"])
+
+        try hooks.stop(["session_id": "new", "cwd": repo!, "last_assistant_message": "## Paso 3\n\nHecho"])
+        XCTAssertEqual(Sessions.all(in: store).map { $0.meta.session?.id }, ["new"])
+    }
+
+    func testHandedOverNoteGoesAtTheNextStartIfNothingReplacedIt() throws {
+        try hooks.stop(["session_id": "old", "cwd": repo!, "last_assistant_message": "## A medias\n\nFalta el paso 3"])
+        _ = hooks.sessionStart(["session_id": "new", "cwd": repo!])
+        XCTAssertEqual(Sessions.all(in: store).count, 1)
+        XCTAssertNil(hooks.sessionStart(["session_id": "newer", "cwd": repo!]))
+        XCTAssertTrue(Sessions.all(in: store).isEmpty)
     }
 }
 

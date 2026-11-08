@@ -13,6 +13,8 @@ final class Browser {
     var showSessions = false
     /// Note shown in the expanded window; the popover sets it before opening the window.
     var windowSelection: String?
+    /// Note open in the menu bar popover.
+    var popoverSelection: String?
     var search = ""
     var showArchived = false
     var showFinishedPlans = false
@@ -35,8 +37,20 @@ final class Browser {
 
     func selectedNote(in store: NotesStore) -> Note? { windowSelection.flatMap(store.note) }
 
-    /// Drops a folder or topic filter once nothing on disk matches it any more.
+    /// Closes the note wherever it's open, and leaves the Sessions view once it's empty.
+    /// Done before trashing it, so no view is left on a note that's gone.
+    func close(_ id: String, in store: NotesStore) {
+        if windowSelection == id { windowSelection = nil }
+        if popoverSelection == id { popoverSelection = nil }
+        if showSessions, !store.sessionNotes.contains(where: { $0.id != id }) { showSessions = false }
+    }
+
+    /// Drops a folder or topic filter once nothing on disk matches it any more, and closes
+    /// notes deleted from outside (an agent, Finder, a newer session note replacing it).
     func prune(against store: NotesStore) {
+        if let id = windowSelection, store.note(id) == nil { close(id, in: store) }
+        if let id = popoverSelection, store.note(id) == nil { close(id, in: store) }
+        if showSessions, store.sessionNotes.isEmpty { showSessions = false }
         if let folder = selectedFolder, !store.folders.contains(where: { $0.name == folder }) { selectedFolder = nil }
         if let topic = selectedTopic, !store.notes.contains(where: { $0.meta.topic == topic }) { selectedTopic = nil }
     }

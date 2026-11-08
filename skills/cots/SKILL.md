@@ -49,10 +49,16 @@ EOF
    - **Otros agentes:** `cots wait <id> --timeout 1800` en primer plano.
 3. La salida empieza con `review: approved|changes|rejected`, luego `comment:` si lo hay, y después el plan **tal como quedó**, porque el usuario puede haberlo editado: sigue esa versión.
    - **approved:** ejecuta el plan.
-   - **changes:** revísalo según el comentario, actualízalo con `cots plan` (uno nuevo) y vuelve a esperar.
+   - **changes:** corrige **ese mismo plan** según el comentario con `cots plan --replace <id> --summary "<qué cambió>" <<'EOF' … EOF` (el título se mantiene si omites `--title`) y vuelve a esperar con `cots wait <id>`. Nunca crees un plan nuevo al pedir cambios: el nuevo sustituye al anterior.
    - **rejected:** detente y pregunta.
 
 ## Sesiones anteriores
+
+En Claude Code, el hook `Stop` guarda tu última respuesta de cada sesión para retomarla después, pero **solo si trae información a detalle**: código, tablas, títulos (`##`) o una explicación larga. Los cierres breves ("listo, pasan 40 tests y 3 features ya están en prod") no se guardan como sesión, porque el usuario no necesita volver a verlos. Por eso:
+
+- Si tu respuesta final es un estado o un resumen corto, escríbela corta y sin títulos: no se guardará.
+- Si deja contexto que el usuario o la próxima sesión necesitarán (decisiones, pasos pendientes, comandos, diseño), dale estructura con `##` o bloques de código, y se guardará.
+- Aunque no se guarde como sesión, "guarda en cots" sigue guardando la última respuesta, sea cual sea.
 
 Si al empezar recibes un aviso de coTs sobre la sesión anterior del proyecto, menciónalo en una línea. Léelo con `cots read <id>` solo si el usuario quiere retomarla.
 
