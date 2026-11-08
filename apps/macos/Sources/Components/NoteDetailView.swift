@@ -167,7 +167,7 @@ struct NoteDetailView: View {
         let status = note.reviewStatus ?? .pending
         return VStack(alignment: .leading, spacing: 8) {
             HStack {
-                ReviewBadge(status: status)
+                ReviewBadge(status: status, revising: note.isBeingRevised)
                 if let at = note.meta.review?.at.flatMap(Timestamp.parse), status != .pending {
                     Text(at, format: .relative(presentation: .named)).font(.caption2).foregroundStyle(.secondary)
                 }
@@ -204,6 +204,16 @@ struct NoteDetailView: View {
             editing = false
         }
         store.setReview(note, status, comment: reviewComment)
+        switch status {
+        case .changes:
+            // Back to the list, where the row shows when the AI picks the changes up.
+            if let onBack { onBack() } else { browser.windowSelection = nil }
+        case .approved:
+            // Done with it: on to the rest of the project the plan was made for.
+            browser.returnToProject(of: note)
+        case .pending, .rejected:
+            break
+        }
     }
 
     private func actionBar(_ note: Note) -> some View {

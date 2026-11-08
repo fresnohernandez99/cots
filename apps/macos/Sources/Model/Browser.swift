@@ -45,6 +45,16 @@ final class Browser {
         if showSessions, !store.sessionNotes.contains(where: { $0.id != id }) { showSessions = false }
     }
 
+    /// Closes the note and shows the list of its project (all its notes, any folder).
+    func returnToProject(of note: Note) {
+        if windowSelection == note.id { windowSelection = nil }
+        if popoverSelection == note.id { popoverSelection = nil }
+        showSessions = false
+        search = ""
+        selectedFolder = nil
+        selectedTopic = note.meta.topic
+    }
+
     /// Drops a folder or topic filter once nothing on disk matches it any more, and closes
     /// notes deleted from outside (an agent, Finder, a newer session note replacing it).
     func prune(against store: NotesStore) {

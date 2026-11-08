@@ -27,13 +27,24 @@ struct TopicChip: View {
 struct ReviewBadge: View {
     let status: ReviewStatus
     var muted = false
+    /// An agent picked up the requested changes and is rewriting the plan.
+    var revising = false
 
     var body: some View {
-        Label(status.label, systemImage: status.symbol)
-            .font(.caption2.weight(.medium))
-            .lineLimit(1)
-            .fixedSize()
-            .foregroundStyle(muted ? Color.gray : status.color)
+        Group {
+            if revising {
+                HStack(spacing: 4) {
+                    ProgressView().controlSize(.mini)
+                    Text("IA aplicando cambios")
+                }
+            } else {
+                Label(status.label, systemImage: status.symbol)
+            }
+        }
+        .font(.caption2.weight(.medium))
+        .lineLimit(1)
+        .fixedSize()
+        .foregroundStyle(muted ? Color.gray : status.color)
     }
 }
 
@@ -66,13 +77,20 @@ struct NoteRow: View {
                 }
                 HStack(spacing: 5) {
                     if let topic = note.meta.topic { TopicChip(topic: topic, muted: finished) }
-                    if let review = note.reviewStatus { ReviewBadge(status: review, muted: finished) }
-                    Group {
-                        if showFolder { Text(config?.title ?? note.folder) }
-                        Text(note.date, format: .relative(presentation: .named))
+                    if let review = note.reviewStatus { ReviewBadge(status: review, muted: finished, revising: note.isBeingRevised) }
+                    // When the chips leave little room the folder goes first, then the date:
+                    // otherwise they wrap one letter per line or run past the edge.
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 5) {
+                            if showFolder { Text(config?.title ?? note.folder) }
+                            date
+                        }
+                        date
+                        Color.clear.frame(width: 0, height: 0)
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 }
             }
             Spacer(minLength: 0)
@@ -84,5 +102,9 @@ struct NoteRow: View {
         .padding(.vertical, 5)
         .opacity(finished ? 0.75 : 1)
         .contentShape(Rectangle())
+    }
+
+    private var date: some View {
+        Text(note.date, format: .relative(presentation: .named)).fixedSize()
     }
 }
