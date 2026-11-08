@@ -157,6 +157,7 @@ public final class MCPServer {
                     if let c = note.meta.review?.comment, !c.isEmpty { out += "comment: \(c)\n" }
                     if status == .pending { return out + "El usuario aún no ha decidido." }
                     if status == .changes {
+                        try? store.markChangesSeen(id)
                         out += "Corrige este mismo plan: create_plan con replace=\"\(id)\" (no crees otro).\n"
                     }
                     return out + "\n# \(note.title)\n\n" + note.body.trimmingCharacters(in: .newlines)

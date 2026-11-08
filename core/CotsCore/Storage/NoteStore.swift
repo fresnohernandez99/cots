@@ -277,7 +277,16 @@ public final class NoteStore: @unchecked Sendable {
             Frontmatter.set(Node(status.rawValue), at: ["review", "status"], in: &node)
             Frontmatter.set(comment.flatMap { $0.isEmpty ? nil : Node($0) }, at: ["review", "comment"], in: &node)
             Frontmatter.set(Node(Timestamp.now()), at: ["review", "at"], in: &node)
+            Frontmatter.set(nil, at: ["review", "seen"], in: &node)
         }
+    }
+
+    /// An agent has read the user's request for changes and is now revising the plan.
+    /// Only the first read counts, so a second `cots wait` doesn't rewrite the file.
+    public func markChangesSeen(_ id: String) throws {
+        let review = try note(id: id).meta.review
+        guard review?.resolvedStatus == .changes, review?.seen == nil else { return }
+        try updateFrontmatter(id, touch: false) { Frontmatter.set(Node(Timestamp.now()), at: ["review", "seen"], in: &$0) }
     }
 
     /// An agent's new version of a plan the user sent back: it takes the old one's place

@@ -47,6 +47,11 @@ extension Note {
         style == .plan && [.pending, .changes].contains(meta.review?.resolvedStatus ?? .pending)
     }
 
+    /// Sent back for changes and an agent has picked up the request: it's working on the plan.
+    public var isBeingRevised: Bool {
+        style == .plan && meta.review?.resolvedStatus == .changes && meta.review?.seen != nil
+    }
+
     /// Notes are filed under the project they were written from; names compare without case.
     public func belongs(toTopic topic: String) -> Bool {
         meta.topic?.caseInsensitiveCompare(topic) == .orderedSame

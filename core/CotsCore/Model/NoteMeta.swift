@@ -32,11 +32,15 @@ public struct Review: Codable, Equatable, Sendable {
     public var status: String?
     public var comment: String?
     public var at: String?
+    /// When an agent read a `changes` verdict (`cots wait`, `get_plan_review`): from then
+    /// until it replaces the plan, the app shows the agent as working on it.
+    public var seen: String?
 
-    public init(status: String? = nil, comment: String? = nil, at: String? = nil) {
+    public init(status: String? = nil, comment: String? = nil, at: String? = nil, seen: String? = nil) {
         self.status = status
         self.comment = comment
         self.at = at
+        self.seen = seen
     }
 
     public var resolvedStatus: ReviewStatus { ReviewStatus(rawValue: status ?? "") ?? .pending }

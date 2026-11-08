@@ -99,6 +99,14 @@ final class NoteStoreTests: XCTestCase {
         XCTAssertEqual(reviewed.meta.review?.resolvedStatus, .changes)
         XCTAssertEqual(reviewed.meta.review?.comment, "más tests")
         XCTAssertNotNil(reviewed.meta.review?.at)
+        XCTAssertFalse(reviewed.isBeingRevised)
+
+        // The agent reads the verdict: the app shows it working until the plan is replaced.
+        try store.markChangesSeen(plan.id)
+        XCTAssertTrue(try store.note(id: plan.id).isBeingRevised)
+        // Asking for changes again waits for the agent to read the new request.
+        XCTAssertFalse(try store.setReview(plan.id, .changes, comment: "y docs").isBeingRevised)
+        try store.markChangesSeen(plan.id)
 
         // The agent's new version replaces the plan: same id, pending again, no second plan.
         let revised = try store.revisePlan(plan.id, title: nil, summary: "v2", body: "- [ ] paso\n- [ ] más tests")
@@ -108,6 +116,7 @@ final class NoteStoreTests: XCTestCase {
         XCTAssertEqual(revised.meta.review?.resolvedStatus, .pending)
         XCTAssertNil(revised.meta.review?.comment)
         XCTAssertEqual(revised.meta.resolvedStatus, .unread)
+        XCTAssertFalse(revised.isBeingRevised)
         XCTAssertTrue(revised.body.contains("más tests"))
         XCTAssertEqual(try store.notes(in: "plans").count, 1)
         var note = try Frontmatter.parse("title: Nota")
